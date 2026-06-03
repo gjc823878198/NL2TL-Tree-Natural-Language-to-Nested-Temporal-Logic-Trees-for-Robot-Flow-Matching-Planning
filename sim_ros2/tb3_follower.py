@@ -74,6 +74,22 @@ class TB3Follower(Node):
         self.pose = (self.sx, self.sy, 0.0)                 # WORLD pose
         self.have_odom = False
         self.sensed = []
+        # short sliding window of recent world-frame scan points: a 0.22 m
+        # cylinder is hit by only a handful of LiDAR beams per scan, so one frame
+        # is too sparse to cluster/fit reliably; aggregating a few recent frames
+        # (the robot has moved slightly, so it sweeps more of each arc) gives a
+        # denser cloud -> a well-conditioned circle fit and a stable detection,
+        # while old frames expire so far obstacles are still forgotten.
+        self._tick = 0
+        self._pcl_window = []          # [(tick, [(x, y), ...]), ...]
+        self.pcl_window_ticks = 8      # ~1.1 s of frames aggregated per cluster
+        self._last_cloud = []          # aggregated world points (RViz diagnostic)
+        # optional persistent map: accumulate the (now stable, fit-centred)
+        # clustered circles into one deduped set, so ALL discovered obstacles
+        # stay shown -- higher count, at the cost of remembering objects no longer
+        # in view (fine in a static scene; clustering means it can't grow a ring).
+        self.persist_map = bool(getattr(args, "persist_map", False))
+        self._map = []
         self.travelled = []
         self.create_subscription(LaserScan, "/scan", self._on_scan,
                                  qos_profile_sensor_data)
@@ -167,17 +183,36 @@ class TB3Follower(Node):
     def _ingest_scan(self):
         if self.scan is None:
             return
-        # project the scan, cluster it into ONE bounding circle per object (not
-        # one disk per grid cell), and keep only a SHORT memory -- an obstacle is
-        # a single stable circle while visible and is forgotten almost as soon as
-        # the robot has driven past it (re-detected next time it is in view), so
-        # the set never accumulates into an ever-growing blob.
+        # project the scan to world points, accumulate a SHORT sliding window of
+        # recent frames (denser cloud per object -> robust circle fit), then
+        # cluster the union into ONE bounding circle per object.  Old frames
+        # expire from the window, so an obstacle the robot has driven past is
+        # forgotten and simply re-detected when it is in view again.
+        self._tick += 1
         pts = scan_to_points(
             list(self.scan.ranges), self.scan.angle_min,
             self.scan.angle_increment, self.pose,
             range_max=min(self.sense_range, self.scan.range_max))
-        clusters = cluster_points_to_disks(pts, viewpoint=self.pose[:2])
-        self.sensed = fuse_sensed(self.sensed, clusters, ttl=4)
+        self._pcl_window.append((self._tick, pts))
+        self._pcl_window = [(t, p) for (t, p) in self._pcl_window
+                            if self._tick - t < self.pcl_window_ticks]
+        agg = [p for (_, frame) in self._pcl_window for p in frame]
+        self._last_cloud = agg          # for the RViz raw-cloud diagnostic
+        # lenient thresholds: real LiDAR returns on a thin cylinder are sparse, so
+        # keep small clusters (min_pts=2) and don't despeckle them away
+        # (speckle_min=1); the circle fit still recovers the centre when the arc
+        # is dense enough, else the covering-disk fallback keeps the detection.
+        clusters = cluster_points_to_disks(
+            agg, viewpoint=self.pose[:2], speckle_min=1, min_pts=2)
+        if self.persist_map:
+            # never-forget dedup-merge -> a stable global map of every obstacle
+            # discovered so far (one circle each, EMA-refined centre).
+            self._map = fuse_sensed(self._map, clusters, ttl=10**9,
+                                    link=0.5, ema=0.3)
+            self.sensed = [{k: v for k, v in o.items() if k != "_age"}
+                           for o in self._map]
+        else:
+            self.sensed = clusters
 
     def _blocked(self, plan, i, look=18):
         for (x, y) in plan[i:i + look]:
@@ -508,6 +543,15 @@ class TB3Follower(Node):
             c.pose.position.x, c.pose.position.y = float(o["x"]), float(o["y"])
             c.pose.position.z = 0.25
             arr.markers.append(c)
+        # --- raw aggregated LiDAR cloud (diagnostic): the grey points are what
+        #     the perception sees; the red circles are fit to THESE points, so if
+        #     the points don't line up with the obstacles it's a sensing/pose
+        #     issue, not a clustering one ---
+        if self._last_cloud:
+            pc = base(Marker.POINTS, "scan_points", 0.55, 0.55, 0.6, 0.9, 0.035)
+            pc.points = [Point(x=float(x), y=float(y), z=0.05)
+                         for (x, y) in self._last_cloud]
+            arr.markers.append(pc)
         # --- the task's NATURAL-LANGUAGE description, floating above the scene ---
         if self.task_nl:
             import textwrap
@@ -535,7 +579,13 @@ def main():
     ap.add_argument("--case", default="closed_loop_multi",
                     help="planner case; default closed_loop_multi == the SAME "
                          "map+task as the 2D demo (closed_loop_demo.py)")
-    ap.add_argument("--sense-range", type=float, default=3.0)
+    ap.add_argument("--sense-range", type=float, default=3.5,
+                    help="LiDAR sensing radius (m); capped at the scan's range_max. "
+                         "Bigger = more obstacles in view at once (more red circles)")
+    ap.add_argument("--persist-map", action="store_true",
+                    help="accumulate a persistent global map of every discovered "
+                         "obstacle (more red circles, stays shown) instead of the "
+                         "default short-memory in-view-only set")
     ap.add_argument("--replan-period", type=float, default=5.0,
                     help="TeLoGraF re-plan period in seconds (target; bounded "
                          "below by the planner's per-call time)")
