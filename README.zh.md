@@ -312,8 +312,10 @@ TeLoGraF 周期性地从当前位姿重规划参考轨迹,MPPI 控制器跟踪�
 
 | 角色 | 文件 | 作用 |
 |---|---|---|
+| 共享场景 | [`sim_ros2/scenario.py`](sim_ros2/scenario.py) | 起点、三个目标(访问顺序 **B → A → C**)、均匀圆柱障碍场、deadline;**2D demo 与 Gazebo 闭环共用**。直接 `python3 sim_ros2/scenario.py` 可打印本次任务(NL + STL + 障碍) |
 | 仿真 | [`sim_ros2/launch/tb3_sim.launch.py`](sim_ros2/launch/tb3_sim.launch.py) | gzserver(开放圆柱 world)+ TB3 spawn + RViz markers |
 | 闭环控制 | [`sim_ros2/tb3_follower.py`](sim_ros2/tb3_follower.py) | TeLoGraF 每 5s 重规划 + MPPI 轨迹跟踪 → `/cmd_vel` |
+| 纯 2D 版 | [`sim_ros2/closed_loop_demo.py`](sim_ros2/closed_loop_demo.py) | **不依赖 ROS/Gazebo**,同一套 sense→plan→replan 逻辑,出 PNG + GIF(见 §7B 末) |
 
 **两阶段闭环**(论文 §4 / 附录描述的就是这个回路):
 

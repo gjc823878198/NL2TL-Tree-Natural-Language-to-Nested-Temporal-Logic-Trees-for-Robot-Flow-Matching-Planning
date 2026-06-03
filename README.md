@@ -121,14 +121,52 @@ python3 outputs/paper/figure_single_case.py
 streamlit run viz_app.py
 ```
 
-**ROS 2 + Gazebo closed loop** (two terminals, both must run at once):
+### Closed-loop demo (sense → plan → re-plan)
+
+There are two ways to run the closed loop; both use the **same** scenario in
+[`sim_ros2/scenario.py`](sim_ros2/scenario.py) (start pose, three goals visited
+**B → A → C**, a uniform cylinder field, deadline). Run
+`python3 sim_ros2/scenario.py` to print the exact task (NL + STL + obstacles).
+
+**(a) Pure 2-D, no ROS/Gazebo needed** — easiest; runs the identical
+sense→plan→re-plan loop in a Python loop and writes a top-down PNG + GIF:
 
 ```bash
-# terminal A — sim: Gazebo brings up TB3 + the cylinder world
-ros2 launch sim_ros2/launch/tb3_sim.launch.py
-# terminal B — follower: TeLoGraF re-plans every 5 s, MPPI tracks /cmd_vel
-python3 sim_ros2/tb3_follower.py --multi-goal
+cd code
+python3 sim_ros2/closed_loop_demo.py        # -> outputs/sim_ros2/closed_loop/*.png|.gif
 ```
+
+**(b) Full ROS 2 + Gazebo Classic + TurtleBot3** — **two terminals, both must
+run at the same time** (the robot moves only when the follower in terminal B is
+running):
+
+```bash
+# --- terminal A: simulation (leave it running; do NOT Ctrl-C) ---
+cd code
+pkill -9 -f gzserver; pkill -9 -f gzclient        # clear any stale Gazebo on port 11345
+export TURTLEBOT3_MODEL=burger
+ros2 launch sim_ros2/launch/tb3_sim.launch.py     # add gui:=true to see the Gazebo 3-D window
+
+# --- terminal B: follower (start while A is still up) ---
+cd code
+python3 sim_ros2/tb3_follower.py --multi-goal     # TeLoGraF re-plans every 5 s, MPPI -> /cmd_vel
+```
+
+Single-case variants: `ros2 launch sim_ros2/launch/tb3_sim.launch.py case:=reach_avoid`
+paired with `python3 sim_ros2/tb3_follower.py --case reach_avoid`.
+
+**Gotchas** (these cost real debugging time):
+- **Robot not moving?** You only started terminal A. The re-planning + control
+  live in the follower (terminal B) — both terminals must run together.
+- **`gzserver exit 255` / "Entity already exists":** a stale Gazebo holds port
+  11345 — run `pkill -9 -f gzserver` before relaunching.
+- **`rviz2: undefined symbol __libc_pthread_init`:** the snap VS Code terminal
+  injects `/snap` libs — use a **system terminal** (the launch file also strips
+  `/snap` from `LD_LIBRARY_PATH`).
+- **Re-plans taking too long?** TeLoGraF is CPU-bound; run headless
+  (`gui:=false`, the default) and/or cap threads with `TELOGRAF_THREADS=6`.
+
+See [`sim_ros2/README.md`](sim_ros2/README.md) for the full troubleshooting list.
 
 ---
 
