@@ -28,10 +28,13 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import (qos_profile_sensor_data, QoSProfile,
                        QoSDurabilityPolicy)
+from rclpy.time import Time
+from rclpy.parameter import Parameter
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, Point
 from visualization_msgs.msg import Marker, MarkerArray
+from tf2_ros import Buffer, TransformListener
 
 from planner import get_case, plan_waypoints                      # noqa: E402
 from planner.telograf_infer import _obstacle_blocked              # noqa: E402
@@ -65,14 +68,26 @@ def _plan(case, start_xy, obstacles):
 class TB3Follower(Node):
     def __init__(self, args):
         super().__init__("tb3_follower")
+        # use SIM time so the TF timestamps (stamped in sim time by Gazebo) line
+        # up with our lookups; otherwise tf2 treats every transform as stale.
+        self.set_parameters([Parameter("use_sim_time", Parameter.Type.BOOL, True)])
         self.case = get_case(args.case)
         self.sx, self.sy = self.case["map_hint"]["start"]   # world spawn
         self.reaches = _reach_targets(self.case)
         self.sense_range = args.sense_range
         self.frame = "map"
         self.scan = None
-        self.pose = (self.sx, self.sy, 0.0)                 # WORLD pose
+        self.pose = (self.sx, self.sy, 0.0)                 # WORLD pose (base)
+        self._scan_pose = (self.sx, self.sy, 0.0)           # odom pose @ scan time
         self.have_odom = False
+        # TF: transform each scan into `map` at its OWN timestamp, giving the
+        # correct laser pose (mount offset + yaw-at-capture).  This fixes the
+        # offset / rotation / smear that come from projecting with the latest
+        # (lagged) /odom pose.  Falls back to the odom pose + a fixed burger
+        # laser mount offset if TF is not yet available.
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+        self.laser_dx, self.laser_dy = -0.032, 0.0          # base_scan vs base
         self.sensed = []
         # short sliding window of recent world-frame scan points: a 0.22 m
         # cylinder is hit by only a handful of LiDAR beams per scan, so one frame
@@ -172,6 +187,7 @@ class TB3Follower(Node):
     # -- callbacks --------------------------------------------------------
     def _on_scan(self, msg):
         self.scan = msg
+        self._scan_pose = self.pose            # pose paired to THIS scan (fallback)
 
     def _on_odom(self, msg):
         # TB3's diff-drive publishes /odom in WORLD coordinates (at the spawn
@@ -179,6 +195,24 @@ class TB3Follower(Node):
         p = msg.pose.pose.position
         self.pose = (p.x, p.y, _yaw(msg.pose.pose.orientation))
         self.have_odom = True
+
+    def _laser_pose_in_map(self):
+        """(x, y, yaw) of the laser in the `map` frame at the current scan's
+        timestamp, via TF (correct mount offset + yaw-at-capture).  Falls back to
+        the odom pose paired to the scan plus the burger laser mount offset if TF
+        is not yet available."""
+        msg = self.scan
+        frame = msg.header.frame_id or "base_scan"
+        try:
+            tf = self.tf_buffer.lookup_transform(
+                self.frame, frame, Time.from_msg(msg.header.stamp))
+            t = tf.transform.translation
+            return (t.x, t.y, _yaw(tf.transform.rotation))
+        except Exception:
+            rx, ry, ryaw = self._scan_pose      # odom pose at scan arrival
+            c, s = math.cos(ryaw), math.sin(ryaw)
+            return (rx + self.laser_dx * c - self.laser_dy * s,
+                    ry + self.laser_dx * s + self.laser_dy * c, ryaw)
 
     def _ingest_scan(self):
         if self.scan is None:
@@ -191,7 +225,7 @@ class TB3Follower(Node):
         self._tick += 1
         pts = scan_to_points(
             list(self.scan.ranges), self.scan.angle_min,
-            self.scan.angle_increment, self.pose,
+            self.scan.angle_increment, self._laser_pose_in_map(),
             range_max=min(self.sense_range, self.scan.range_max))
         self._pcl_window.append((self._tick, pts))
         self._pcl_window = [(t, p) for (t, p) in self._pcl_window
