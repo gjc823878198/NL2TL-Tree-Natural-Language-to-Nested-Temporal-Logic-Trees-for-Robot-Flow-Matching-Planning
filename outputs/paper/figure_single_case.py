@@ -31,7 +31,7 @@ EXTRA = [{"kind": "circle", "x": -1.8, "y": -0.4, "r": 0.40},
 
 def main():
     plt.rcParams.update({"font.family": "serif", "mathtext.fontset": "cm",
-                         "font.size": 10})
+                         "font.size": 12})
     case = get_case("reach_within_T")
     traj = np.asarray(plan_waypoints(case, n_steps=120, backend="telograf",
                                      obstacles=EXTRA), float)
@@ -45,8 +45,8 @@ def main():
     # landscape layout: square plot (left) | colorbar | SPACER | NL+STL box (right).
     # the spacer column gives the colorbar's right-side tick labels room so they
     # don't collide with the text box.
-    fig = plt.figure(figsize=(8.0, 4.0))
-    gs = fig.add_gridspec(1, 4, width_ratios=[1.0, 0.045, 0.42, 1.0], wspace=0.04)
+    fig = plt.figure(figsize=(5.2, 2.7))
+    gs = fig.add_gridspec(1, 4, width_ratios=[1.0, 0.05, 0.62, 1.05], wspace=0.04)
     ax = fig.add_subplot(gs[0, 0]); ax.set_aspect("equal")
     ax.set_xlim(-4.2, 4.2); ax.set_ylim(-4.2, 4.2)
     ax.set_xticks([]); ax.set_yticks([])
@@ -68,7 +68,7 @@ def main():
     sx, sy = case["map_hint"]["start"]
     ax.plot(sx, sy, marker="s", ms=10, color="k", zorder=6)
     ax.annotate("start", (sx, sy), textcoords="offset points", xytext=(6, 6),
-                fontsize=8)
+                fontsize=10)
 
     # --- time anchoring (Route B): stamp each waypoint with REAL seconds at a
     # nominal tracking speed, so the colour axis is wall-clock time and the
@@ -91,16 +91,17 @@ def main():
                         linewidth=3.0, zorder=5)
     lc.set_array(seg_t)
     ax.add_collection(lc)
-    # title: short + left-aligned so it stays over the plot and clears the colorbar
-    ax.set_title(r"Frozen TeLoGraF $+$ STLCG (no A*)",
-                 fontsize=11, fontweight="bold", loc="left", pad=6)
+    # title: SHORT + left-aligned so it stays over the plot and clears the
+    # colorbar's top "(deadline)" tick label (a longer title collides with it).
+    ax.set_title(r"TeLoGraF (no A*)",
+                 fontsize=12, fontweight="bold", loc="left", pad=6)
     cax = fig.add_subplot(gs[0, 1])
     cb = fig.colorbar(ScalarMappable(norm=plt.Normalize(0, deadline),
                                      cmap="rainbow"), cax=cax)
-    cb.set_label("time (s)", fontsize=10, fontweight="bold")
+    cb.set_label("time (s)", fontsize=12, fontweight="bold")
     cb.set_ticks([0, round(t_arr), deadline])
     cb.set_ticklabels(["0", f"{t_arr:.0f} (arrive)", f"{deadline:.0f} (deadline)"])
-    cax.tick_params(labelsize=9)
+    cax.tick_params(labelsize=11)
     # --- NL + STL task box: in the RIGHT column (gs[0,3]), large + bold ---
     tax = fig.add_subplot(gs[0, 3]); tax.axis("off")
     cap = ("NL: “" + "\n".join(textwrap.wrap(case["nl"], 24)) + "”\n\n"
@@ -110,7 +111,7 @@ def main():
            rf"$\rho_{{\mathrm{{time}}}}{{=}}{rho_t:+.2f}$,  "
            rf"$\rho_{{\mathrm{{safe}}}}{{=}}{rho:+.2f}\,\mathrm{{m}}$")
     tax.text(0.0, 0.5, cap, transform=tax.transAxes, ha="left", va="center",
-             fontsize=12, fontweight="bold",
+             fontsize=13.5, fontweight="bold",
              bbox=dict(boxstyle="round,pad=0.6", fc="#f7f7f7", ec="#bbbbbb",
                        lw=1.1))
     fig.subplots_adjust(left=0.02, right=0.99, top=0.88, bottom=0.05)

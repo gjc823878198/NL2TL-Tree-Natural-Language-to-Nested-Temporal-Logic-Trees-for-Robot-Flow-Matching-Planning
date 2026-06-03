@@ -61,7 +61,7 @@ def _weave_case():
 
 def main():
     plt.rcParams.update({"font.family": "serif", "mathtext.fontset": "cm",
-                         "font.size": 12})
+                         "font.size": 13.5})
     fig = plt.figure(figsize=(16.8, 4.15))
     gs = fig.add_gridspec(1, 3, width_ratios=[1.0, 1.5, 1.12], wspace=0.10)
 
@@ -86,17 +86,17 @@ def main():
         ax.add_patch(Circle((x, y), 0.66, facecolor=c, edgecolor="#333",
                             lw=1.2, zorder=2))
         tc = "white" if c in (REACH, AVOID) else "#16213a"
-        ax.text(x, y, lb, ha="center", va="center", fontsize=9.5,
+        ax.text(x, y, lb, ha="center", va="center", fontsize=11,
                 fontweight="bold", color=tc, zorder=3)
-    ax.set_title("(a) Nested STL spec", fontsize=13.5, fontweight="bold")
+    ax.set_title("(a) Nested STL spec", fontsize=15, fontweight="bold")
     ax.text(5, 0.4, r"keep-safe $=G\,\neg\,$unsafe, grounded by sensed disks",
-            ha="center", fontsize=9.0, fontweight="bold", color="#444")
+            ha="center", fontsize=10.5, fontweight="bold", color="#444")
 
     # ---------- (b) GNN + flow matching + robustness guidance ----------
     ax = fig.add_subplot(gs[0, 1]); ax.axis("off")
     ax.set_xlim(0, 100); ax.set_ylim(0, 100)
 
-    def box(x, y, w, h, t, fc, ec, fs=9.5, bold=False):
+    def box(x, y, w, h, t, fc, ec, fs=11, bold=False):
         ax.add_patch(FancyBboxPatch((x, y), w, h,
                      boxstyle="round,pad=0.3,rounding_size=2", lw=1.4,
                      facecolor=fc, edgecolor=ec, zorder=3))
@@ -108,25 +108,25 @@ def main():
                      mutation_scale=14, lw=lw, color=ec, zorder=2))
 
     # encoder -> conditioning
-    box(1, 66, 27, 16, "frozen GNN\nencoder", "#d7e3f2", BOX_E, fs=10.5,
+    box(1, 66, 27, 16, "frozen GNN\nencoder", "#d7e3f2", BOX_E, fs=12,
         bold=True)
     ax.text(14.5, 60.5, r"$\Rightarrow$ conditioning $z$", ha="center",
-            fontsize=9.5, fontweight="bold")
+            fontsize=11, fontweight="bold")
     arr(28, 74, 39, 74)
     # flow / denoising row
     xs = [47, 62, 77, 92]; yr = 74
-    ax.text(69.5, 92, "flow matching (frozen)", ha="center", fontsize=11,
+    ax.text(69.5, 92, "flow matching (frozen)", ha="center", fontsize=12.5,
             fontweight="bold", color="#16213a")
     for i, (xx, lb) in enumerate(zip(xs, [r"$x_T$", r"$x_t$", r"$\cdots$", r"$x_0$"])):
         ax.add_patch(Circle((xx, yr), 5.6, facecolor="#cfe0d2",
                             edgecolor=GATE_E, lw=1.4, zorder=3))
-        ax.text(xx, yr, lb, ha="center", va="center", fontsize=10,
+        ax.text(xx, yr, lb, ha="center", va="center", fontsize=11.5,
                 fontweight="bold", zorder=4)
         if i < len(xs)-1:
             arr(xx+5.6, yr, xs[i+1]-5.6, yr, ec=GATE_E, lw=1.4)
     # robustness-gradient guidance: box below, arrows up into the row
     box(38, 47, 58, 9, r"differentiable STL robustness $\nabla\rho$ (STLCG)"
-        "\nsteers sampling", "#fbe2df", "#b03a2e", fs=9.5, bold=True)
+        "\nsteers sampling", "#fbe2df", "#b03a2e", fs=11, bold=True)
     for xx in xs[:-1]:
         arr(xx, 56, xx, yr-5.8, ec="#b03a2e", lw=1.3, style="-|>")
     # three mechanism tags, evenly spaced, NO overlap (gaps of 3 units)
@@ -135,12 +135,12 @@ def main():
             "feasibility self-check\n$\\to$ A* if OOD"]
     txs = [1, 35, 69]                       # 1-31, 35-65, 69-99  (gap 3)
     for x, t in zip(txs, tags):
-        box(x, 24, 30, 13, t, MECH, MECH_E, fs=9.0, bold=True)
+        box(x, 24, 30, 13, t, MECH, MECH_E, fs=10.5, bold=True)
     ax.text(50, 15, r"$\rho(G\varphi)=\min_t\rho(\varphi,t),\;\;"
             r"\rho(F\varphi)=\max_t\rho(\varphi,t),\;\;\rho>0 \Rightarrow$ satisfied",
-            ha="center", fontsize=9.5, fontweight="bold", color="#333")
+            ha="center", fontsize=11, fontweight="bold", color="#333")
     ax.set_title("(b) Frozen flow-matching planner $+$ robustness guidance",
-                 fontsize=13.5, fontweight="bold")
+                 fontsize=15, fontweight="bold")
 
     # ---------- (c) REAL weave plan through an obstacle cluster ----------
     ax = fig.add_subplot(gs[0, 2])
@@ -171,12 +171,12 @@ def main():
     lc.set_array(np.linspace(0, 1, len(segs)))
     ax.add_collection(lc)
     ax.annotate(rf"$\rho(G\neg$unsafe$)={rho:+.2f}$", (0.0, -3.3),
-                textcoords="offset points", xytext=(10, -2), fontsize=9.5,
+                textcoords="offset points", xytext=(10, -2), fontsize=11,
                 fontweight="bold", color="#1e7a46")
     ax.text(0.02, 0.98, "colour $=$ time", transform=ax.transAxes, ha="left",
-            va="top", fontsize=8.5, fontweight="bold", color="#555")
+            va="top", fontsize=10, fontweight="bold", color="#555")
     ax.set_title("(c) Real flow plan slaloming a cluster",
-                 fontsize=13.5, fontweight="bold")
+                 fontsize=15, fontweight="bold")
 
     fig.subplots_adjust(left=0.01, right=0.99, top=0.86, bottom=0.04)
     for ext in ("png", "pdf"):
