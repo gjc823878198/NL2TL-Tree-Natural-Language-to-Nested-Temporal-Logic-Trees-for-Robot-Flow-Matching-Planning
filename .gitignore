@@ -1,0 +1,35 @@
+# ---- large / machine-specific (NOT committed; see README "Setup") ----
+.venv-telograf/
+.venv/
+venv/
+env/
+
+# Vendored TeLoGraF planner + its pretrained checkpoint (2.2 GB; clone separately)
+external/
+
+# NL2TL dataset (297 MB; fetch with download_nl2tl.py)
+data/
+
+# Model checkpoints / archives
+*.ckpt
+*.pth
+*.pt
+*.zip
+
+# ---- secrets (never commit; GROQ_API_KEY lives in the environment) ----
+.env
+.env.*
+*.key
+secrets.*
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# ---- editor / OS ----
+.vscode/
+.idea/
+.DS_Store
+*.swp

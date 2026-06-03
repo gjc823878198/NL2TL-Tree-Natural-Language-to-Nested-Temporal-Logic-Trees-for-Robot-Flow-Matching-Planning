@@ -1,0 +1,1 @@
+{"date": "2026-05-29", "n": 48, "n_total": 49, "n_err": 1, "offset": 0, "window": 50, "exact_match": 0.4792, "op_f1": 0.925, "path_f1": 0.5573, "ted_norm": 0.8233, "mean_ted": 1.104, "model": "llama-3.3-70b-versatile", "source": "predictions.jsonl"}

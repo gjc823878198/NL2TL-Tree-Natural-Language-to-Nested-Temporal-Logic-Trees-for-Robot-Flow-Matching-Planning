@@ -1,0 +1,72 @@
+# RViz2 config for the NL2TL-Tree closed-loop demo.
+# Shows /ubicomp/markers (start, ALL goal regions, planned + travelled
+# trajectory, LiDAR range, sensed obstacles) over the live /scan, in the
+# world-fixed "map" frame (tb3_sim.launch.py publishes a static map->odom identity).
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded: ~
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: map
+    Frame Rate: 30
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 1
+      Plane Cell Count: 20
+      Color: 100; 100; 100
+      Reference Frame: map
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Show Names: true
+      Marker Scale: 1
+    - Class: rviz_default_plugins/MarkerArray
+      Name: NL2TL markers
+      Enabled: true
+      Namespaces: {}
+      Topic:
+        Value: /ubicomp/markers
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+    - Class: rviz_default_plugins/LaserScan
+      Name: LiDAR /scan
+      Enabled: true
+      Size (m): 0.05
+      Style: Points
+      Color: 255; 255; 0
+      Color Transformer: FlatColor
+      Topic:
+        Value: /scan
+        Depth: 5
+        Reliability Policy: Best Effort
+    - Class: rviz_default_plugins/RobotModel
+      Name: RobotModel
+      Enabled: true
+      Description Topic:
+        Value: /robot_description
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/FocusCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: TopDown
+      Scale: 45
+      Angle: 0
+      X: 0
+      Y: 0
+    Saved: ~
+Window Geometry:
+  Height: 900
+  Width: 1200
+  Hide Left Dock: false
