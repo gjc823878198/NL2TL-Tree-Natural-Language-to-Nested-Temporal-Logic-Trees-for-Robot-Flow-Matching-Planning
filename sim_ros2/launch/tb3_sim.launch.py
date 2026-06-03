@@ -6,11 +6,15 @@ red = avoid) -- no walls.  TurtleBot3 senses the cylinders online with its 360
 LiDAR (/scan) and the planner routes around them; the robot drives via /cmd_vel
 (diff-drive) and publishes /odom, so RViz shows it moving for real.
 
-    ros2 launch sim_ros2/launch/tb3_sim.launch.py case:=cond_reach_either
-    ros2 launch sim_ros2/launch/tb3_sim.launch.py case:=cond_reach_either gui:=true rviz:=true
+    ros2 launch sim_ros2/launch/tb3_sim.launch.py            # default: closed_loop_multi
+    ros2 launch sim_ros2/launch/tb3_sim.launch.py gui:=true rviz:=true
+
+The default case `closed_loop_multi` is the SAME uniform cylinder map and the
+SAME multi-goal (B -> A -> C) task as the 2D demo (sim_ros2/closed_loop_demo.py),
+so the two simulations show the identical scenario.
 
 Then drive it with the closed-loop follower:
-    ros2 run ... (see tb3_follower.py)  OR  python3 sim_ros2/tb3_follower.py --case cond_reach_either
+    python3 sim_ros2/tb3_follower.py            # also defaults to closed_loop_multi
 """
 import os
 import sys
@@ -113,7 +117,10 @@ def _setup(context, *args, **kwargs):
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument("case", default_value="cond_reach_either"),
+        DeclareLaunchArgument("case", default_value="closed_loop_multi",
+                              description="planner case; default closed_loop_multi"
+                                          " == the SAME map+task as the 2D demo "
+                                          "(sim_ros2/closed_loop_demo.py)."),
         DeclareLaunchArgument("model", default_value="burger",
                               choices=["burger", "waffle", "waffle_pi"]),
         DeclareLaunchArgument("gui", default_value="false",

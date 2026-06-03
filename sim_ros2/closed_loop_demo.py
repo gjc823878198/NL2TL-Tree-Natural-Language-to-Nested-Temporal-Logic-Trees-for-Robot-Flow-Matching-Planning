@@ -19,7 +19,7 @@ Outputs (top-down, RViz marker colours):
     python3 sim_ros2/closed_loop_demo.py
 """
 from __future__ import annotations
-import io, contextlib, math, sys
+import io, contextlib, math, sys, textwrap
 from pathlib import Path
 import numpy as np
 import matplotlib
@@ -186,6 +186,11 @@ def render(travelled, replan_pts, sensed, goal_arrivals, rho):
     cb.set_ticks([0, round(t_arr), deadline])
     cb.set_ticklabels(["0", f"{t_arr:.0f} (finish)", f"{deadline:.0f} (deadline)"])
     cb.ax.tick_params(labelsize=7)
+    # the task's NATURAL-LANGUAGE description, visualised as a footer (same
+    # string the Gazebo RViz overlay shows -- shared via scenario.task_nl())
+    nl = "NL: " + S.task_nl()
+    fig.text(0.5, 0.005, "\n".join(textwrap.wrap(nl, 78)), ha="center",
+             va="bottom", fontsize=8.5, style="italic", color="#333")
     fig.savefig(OUT / "closed_loop_demo.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 

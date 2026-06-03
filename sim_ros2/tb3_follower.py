@@ -133,6 +133,24 @@ class TB3Follower(Node):
                                          for (x, y, r) in CYLINDERS]
             except Exception:
                 pass
+        # ---- task description for the RViz overlay (NL + STL + goal letters) ----
+        # closed_loop_multi sources its NL/STL/labels from the shared scenario so
+        # the RViz text matches what the 2D demo prints; other cases fall back to
+        # the case's own NL string and A,B,C,... labels.
+        if self.case.get("id") == "closed_loop_multi":
+            try:
+                from sim_ros2.scenario import task_nl, task_stl, GOAL_NAMES
+                self.task_nl, self.task_stl = task_nl(), task_stl()
+                self.goal_names = list(GOAL_NAMES)
+            except Exception:
+                self.task_nl = self.task_stl = ""; self.goal_names = []
+        else:
+            self.task_nl = self.case.get("nl", "")
+            self.task_stl = ""
+            self.goal_names = [chr(ord("A") + i) for i in range(len(self.reaches))]
+        # top of the field (for placing the floating NL text above the scene)
+        self._scene_top = max([gy for (_, gy, _) in self.reaches] + [self.sy]) \
+            if self.reaches else 3.0
 
     # -- callbacks --------------------------------------------------------
     def _on_scan(self, msg):
@@ -483,12 +501,33 @@ class TB3Follower(Node):
             c.pose.position.x, c.pose.position.y = float(o["x"]), float(o["y"])
             c.pose.position.z = 0.25
             arr.markers.append(c)
+        # --- the task's NATURAL-LANGUAGE description, floating above the scene ---
+        if self.task_nl:
+            import textwrap
+            txt = base(Marker.TEXT_VIEW_FACING, "task_nl", 1.0, 0.95, 0.3, 1.0, 0.34)
+            txt.pose.position.x = 0.0
+            txt.pose.position.y = float(self._scene_top) + 1.6
+            txt.pose.position.z = 1.0
+            body = "TASK (NL): " + "\n".join(textwrap.wrap(self.task_nl, 42))
+            if self.task_stl:
+                body += "\nSTL: " + self.task_stl
+            txt.text = body
+            arr.markers.append(txt)
+        # --- goal letter labels above each region (shows the visit order) ---
+        for (gx, gy, gr), name in zip(self.reaches, self.goal_names):
+            lab = base(Marker.TEXT_VIEW_FACING, "goal_labels", 1.0, 1.0, 1.0, 1.0, 0.5)
+            lab.pose.position.x, lab.pose.position.y = float(gx), float(gy)
+            lab.pose.position.z = float(gr) + 0.6
+            lab.text = name
+            arr.markers.append(lab)
         self.markers.publish(arr)
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--case", default="cond_reach_either")
+    ap.add_argument("--case", default="closed_loop_multi",
+                    help="planner case; default closed_loop_multi == the SAME "
+                         "map+task as the 2D demo (closed_loop_demo.py)")
     ap.add_argument("--sense-range", type=float, default=3.0)
     ap.add_argument("--replan-period", type=float, default=5.0,
                     help="TeLoGraF re-plan period in seconds (target; bounded "
