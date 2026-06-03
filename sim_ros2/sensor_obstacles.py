@@ -87,23 +87,106 @@ def merge_obstacles(existing: List[dict], new: List[dict],
     return out
 
 
+def voxel_downsample(points, voxel: float = 0.04):
+    """Average the points in each ``voxel``-sized cell into one representative
+    point -- the standard point-cloud density/quantisation-noise reducer."""
+    acc: dict = {}
+    for (x, y) in points:
+        k = (round(x / voxel), round(y / voxel))
+        ax, ay, c = acc.get(k, (0.0, 0.0, 0))
+        acc[k] = (ax + float(x), ay + float(y), c + 1)
+    return [(ax / c, ay / c) for (ax, ay, c) in acc.values()]
+
+
+def remove_speckle(points, radius: float = 0.18, min_neighbors: int = 2):
+    """Radius outlier removal: keep a point only if it has >= ``min_neighbors``
+    other points within ``radius`` (drops isolated LiDAR speckle).  Grid-bucketed
+    so it is ~O(n), not O(n^2)."""
+    pts = list(points)
+    if not pts:
+        return []
+    buckets: dict = {}
+    for i, (x, y) in enumerate(pts):
+        buckets.setdefault((round(x / radius), round(y / radius)), []).append(i)
+    r2 = radius * radius
+    keep = []
+    for i, (x, y) in enumerate(pts):
+        gx, gy = round(x / radius), round(y / radius)
+        c = 0
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for j in buckets.get((gx + dx, gy + dy), ()):
+                    if j != i and (x - pts[j][0]) ** 2 + (y - pts[j][1]) ** 2 <= r2:
+                        c += 1
+        if c >= min_neighbors:
+            keep.append((float(x), float(y)))
+    return keep
+
+
+def _fit_circle(pts):
+    """Algebraic (Kasa) least-squares circle fit -> (cx, cy, r, rms), or None for
+    near-collinear input (a wall, not a cylinder).  Recovers a cylinder's TRUE
+    centre+radius from its visible arc, so no centroid-'push' heuristic is needed.
+    Closed-form via Cramer's rule (no numpy)."""
+    n = len(pts)
+    if n < 3:
+        return None
+    Sx = Sy = Sxx = Syy = Sxy = Sxz = Syz = Sz = 0.0
+    for (x, y) in pts:
+        z = x * x + y * y
+        Sx += x; Sy += y; Sxx += x * x; Syy += y * y; Sxy += x * y
+        Sxz += x * z; Syz += y * z; Sz += z
+    a = [[Sxx, Sxy, Sx], [Sxy, Syy, Sy], [Sx, Sy, float(n)]]
+    b = [-Sxz, -Syz, -Sz]
+
+    def det3(m):
+        return (m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+                - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+                + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]))
+
+    det = det3(a)
+    if abs(det) < 1e-9:                                  # collinear -> wall
+        return None
+
+    def col(j):
+        m = [row[:] for row in a]
+        for i in range(3):
+            m[i][j] = b[i]
+        return det3(m) / det
+    d, e, f = col(0), col(1), col(2)
+    cx, cy = -d / 2.0, -e / 2.0
+    rr = (d * d + e * e) / 4.0 - f
+    if rr <= 1e-6:
+        return None
+    r = math.sqrt(rr)
+    rms = math.sqrt(sum((math.hypot(x - cx, y - cy) - r) ** 2
+                        for (x, y) in pts) / n)
+    return (cx, cy, r, rms)
+
+
 def cluster_points_to_disks(points: List[Tuple[float, float]],
                             viewpoint: Tuple[float, float] | None = None,
-                            *, link: float = 0.45, min_pts: int = 2,
-                            base_r: float = 0.16, margin: float = 0.06,
-                            max_r: float = 0.60, push: float = 0.12) -> List[dict]:
-    """Connected-component cluster of world points -> ONE bounding circle per object.
+                            *, voxel: float = 0.04, speckle_radius: float = 0.18,
+                            speckle_min: int = 2, link: float = 0.45,
+                            min_pts: int = 3, base_r: float = 0.12,
+                            margin: float = 0.05, max_r: float = 0.60,
+                            push: float = 0.12, fit_max_rms: float = 0.05,
+                            fit_max_r: float = 0.7) -> List[dict]:
+    """Point-cloud pipeline -> ONE bounding circle per object.
 
-    A LiDAR sees only the *near face* of an object, so snapping each return to
-    its own grid cell paints a ring of disks that GROWS as the robot orbits the
-    object and sweeps more surface (the bug behind "obstacles keep getting
-    bigger").  Instead we link returns that are within ``link`` of each other
-    into one cluster and emit a single disk at the cluster centroid, nudged
-    ``push`` m AWAY from ``viewpoint`` (the robot) to re-centre it from the
-    near face onto the object body.  Radius = covering radius + ``margin``,
-    clamped to [``base_r``, ``max_r``].  Clusters with < ``min_pts`` returns are
-    dropped as speckle.  Pure function (grid-bucketed union-find, no ROS)."""
-    pts = [(float(x), float(y)) for (x, y) in points]
+    Stages: (1) voxel downsample; (2) radius outlier removal (drop speckle);
+    (3) connected-component clustering (DBSCAN-style, ``link`` distance, via
+    grid-bucketed union-find); (4) per cluster an algebraic (Kasa) CIRCLE FIT
+    that recovers the cylinder's true centre+radius from its visible arc.  If the
+    fit is poor or the cluster is near-collinear (a wall), fall back to the
+    cluster centroid nudged ``push`` m off the near face with a covering radius.
+    Radius clamped to [``base_r``, ``max_r``].  Pure function (no ROS, no numpy).
+
+    A LiDAR sees only an object's near face; snapping each return to its own grid
+    cell paints a ring of disks that GROWS as the robot orbits it -- this pipeline
+    instead yields a single, fit-stabilised circle per object."""
+    pts = remove_speckle(voxel_downsample(points, voxel),
+                         speckle_radius, speckle_min)
     n = len(pts)
     if n == 0:
         return []
@@ -144,17 +227,28 @@ def cluster_points_to_disks(points: List[Tuple[float, float]],
     for idxs in groups.values():
         if len(idxs) < min_pts:
             continue
-        xs = [pts[i][0] for i in idxs]
-        ys = [pts[i][1] for i in idxs]
-        cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
-        if viewpoint is not None and push:
-            vx, vy = viewpoint
-            d = math.hypot(cx - vx, cy - vy)
-            if d > 1e-6:
-                cx += push * (cx - vx) / d
-                cy += push * (cy - vy) / d
-        cover = max(math.hypot(x - cx, y - cy) for x, y in zip(xs, ys))
-        r = min(max_r, max(base_r, cover + margin))
+        cluster = [pts[i] for i in idxs]
+        xs = [p[0] for p in cluster]
+        ys = [p[1] for p in cluster]
+        gx, gy = sum(xs) / len(xs), sum(ys) / len(ys)        # cluster centroid
+        fit = _fit_circle(cluster)
+        if (fit is not None and fit[3] <= fit_max_rms
+                and base_r <= fit[2] <= fit_max_r
+                and math.hypot(fit[0] - gx, fit[1] - gy) <= max_r):
+            # principled: the circle fit IS the cylinder's centre + radius
+            cx, cy, r = fit[0], fit[1], min(max_r, fit[2] + margin)
+        else:
+            # fallback (wall / short or noisy arc): centroid nudged off the near
+            # face, covering radius
+            cx, cy = gx, gy
+            if viewpoint is not None and push:
+                vx, vy = viewpoint
+                d = math.hypot(cx - vx, cy - vy)
+                if d > 1e-6:
+                    cx += push * (cx - vx) / d
+                    cy += push * (cy - vy) / d
+            cover = max(math.hypot(x - cx, y - cy) for x, y in cluster)
+            r = min(max_r, max(base_r, cover + margin))
         disks.append({"kind": "circle", "x": cx, "y": cy, "r": r})
     return disks
 
