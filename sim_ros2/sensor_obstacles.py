@@ -69,7 +69,13 @@ def scan_to_obstacles(ranges, angle_min, angle_inc, pose,
 
 def merge_obstacles(existing: List[dict], new: List[dict],
                     dedup_cell: float = 0.30) -> List[dict]:
-    """Accumulate sensed disks across scans, deduped on a grid."""
+    """Accumulate sensed disks across scans, deduped on a grid.
+
+    NOTE: this only ever *adds* and never forgets, so as the robot orbits an
+    object and sweeps more of its surface the union of per-cell disks paints an
+    ever-growing ring.  Prefer ``cluster_points_to_disks`` + ``fuse_sensed`` for
+    the live closed loop; this is kept for the offline/known-map path and tests.
+    """
     seen = {(round(o["x"] / dedup_cell), round(o["y"] / dedup_cell))
             for o in existing}
     out = list(existing)
@@ -79,3 +85,113 @@ def merge_obstacles(existing: List[dict], new: List[dict],
             seen.add(key)
             out.append(o)
     return out
+
+
+def cluster_points_to_disks(points: List[Tuple[float, float]],
+                            viewpoint: Tuple[float, float] | None = None,
+                            *, link: float = 0.40, min_pts: int = 2,
+                            base_r: float = 0.20, margin: float = 0.08,
+                            max_r: float = 0.60, push: float = 0.12) -> List[dict]:
+    """Connected-component cluster of world points -> ONE disk per object.
+
+    A LiDAR sees only the *near face* of an object, so snapping each return to
+    its own grid cell paints a ring of disks that GROWS as the robot orbits the
+    object and sweeps more surface (the bug behind "obstacles keep getting
+    bigger").  Instead we link returns that are within ``link`` of each other
+    into one cluster and emit a single disk at the cluster centroid, nudged
+    ``push`` m AWAY from ``viewpoint`` (the robot) to re-centre it from the
+    near face onto the object body.  Radius = covering radius + ``margin``,
+    clamped to [``base_r``, ``max_r``].  Clusters with < ``min_pts`` returns are
+    dropped as speckle.  Pure function (grid-bucketed union-find, no ROS)."""
+    pts = [(float(x), float(y)) for (x, y) in points]
+    n = len(pts)
+    if n == 0:
+        return []
+    buckets: dict = {}
+    for i, (x, y) in enumerate(pts):
+        buckets.setdefault((round(x / link), round(y / link)), []).append(i)
+    parent = list(range(n))
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    link2 = link * link
+    for (gx, gy), idxs in buckets.items():
+        neigh = []
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                neigh += buckets.get((gx + dx, gy + dy), [])
+        for a in idxs:
+            ax, ay = pts[a]
+            for b in neigh:
+                if b <= a:
+                    continue
+                bx, by = pts[b]
+                if (ax - bx) ** 2 + (ay - by) ** 2 <= link2:
+                    union(a, b)
+    groups: dict = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(i)
+    disks: List[dict] = []
+    for idxs in groups.values():
+        if len(idxs) < min_pts:
+            continue
+        xs = [pts[i][0] for i in idxs]
+        ys = [pts[i][1] for i in idxs]
+        cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
+        if viewpoint is not None and push:
+            vx, vy = viewpoint
+            d = math.hypot(cx - vx, cy - vy)
+            if d > 1e-6:
+                cx += push * (cx - vx) / d
+                cy += push * (cy - vy) / d
+        cover = max(math.hypot(x - cx, y - cy) for x, y in zip(xs, ys))
+        r = min(max_r, max(base_r, cover + margin))
+        disks.append({"kind": "circle", "x": cx, "y": cy, "r": r})
+    return disks
+
+
+def fuse_sensed(existing: List[dict], new: List[dict], *,
+                link: float = 0.45, ttl: int = 40, ema: float = 0.4) -> List[dict]:
+    """Fuse freshly-clustered disks into a short-memory sensed set.
+
+    Keeps ONE disk per physical object and tracks what is CURRENTLY around the
+    robot instead of growing forever:
+      * a new disk within ``link`` of an existing one refreshes it (EMA position,
+        radius relaxes toward the new measurement, age reset) -- no duplicate;
+      * a new disk far from all existing ones is appended;
+      * every call ages all disks by 1; disks not re-seen within ``ttl`` calls
+        are dropped (so an object the robot has driven well past is forgotten,
+        rather than accumulated).
+    Each disk carries an internal ``_age`` (calls since last seen)."""
+    out = []
+    for o in existing:
+        o = dict(o)
+        o["_age"] = int(o.get("_age", 0)) + 1
+        out.append(o)
+    for nd in new:
+        best, bestd = None, link
+        for o in out:
+            d = math.hypot(o["x"] - nd["x"], o["y"] - nd["y"])
+            if d < bestd:
+                best, bestd = o, d
+        if best is None:
+            o = dict(nd)
+            o["_age"] = 0
+            out.append(o)
+        else:
+            best["x"] = (1 - ema) * best["x"] + ema * nd["x"]
+            best["y"] = (1 - ema) * best["y"] + ema * nd["y"]
+            # relax the radius toward the new measurement so an over-estimate
+            # decays instead of sticking (never below the fresh reading).
+            best["r"] = max(nd["r"], best["r"] * 0.9)
+            best["_age"] = 0
+    return [o for o in out if o["_age"] <= ttl]
