@@ -89,10 +89,10 @@ def merge_obstacles(existing: List[dict], new: List[dict],
 
 def cluster_points_to_disks(points: List[Tuple[float, float]],
                             viewpoint: Tuple[float, float] | None = None,
-                            *, link: float = 0.40, min_pts: int = 2,
-                            base_r: float = 0.20, margin: float = 0.08,
+                            *, link: float = 0.45, min_pts: int = 2,
+                            base_r: float = 0.16, margin: float = 0.06,
                             max_r: float = 0.60, push: float = 0.12) -> List[dict]:
-    """Connected-component cluster of world points -> ONE disk per object.
+    """Connected-component cluster of world points -> ONE bounding circle per object.
 
     A LiDAR sees only the *near face* of an object, so snapping each return to
     its own grid cell paints a ring of disks that GROWS as the robot orbits the
@@ -160,17 +160,18 @@ def cluster_points_to_disks(points: List[Tuple[float, float]],
 
 
 def fuse_sensed(existing: List[dict], new: List[dict], *,
-                link: float = 0.45, ttl: int = 40, ema: float = 0.4) -> List[dict]:
-    """Fuse freshly-clustered disks into a short-memory sensed set.
+                link: float = 0.45, ttl: int = 4, ema: float = 0.4) -> List[dict]:
+    """Fuse freshly-clustered bounding circles into a SHORT-memory sensed set.
 
-    Keeps ONE disk per physical object and tracks what is CURRENTLY around the
-    robot instead of growing forever:
-      * a new disk within ``link`` of an existing one refreshes it (EMA position,
-        radius relaxes toward the new measurement, age reset) -- no duplicate;
-      * a new disk far from all existing ones is appended;
-      * every call ages all disks by 1; disks not re-seen within ``ttl`` calls
-        are dropped (so an object the robot has driven well past is forgotten,
-        rather than accumulated).
+    The set tracks only what is CURRENTLY around the robot -- it does not keep a
+    long-term map.  A small ``ttl`` (a few control ticks, ~0.5 s) just smooths
+    single-frame LiDAR dropout; an object the robot has driven past is forgotten
+    almost immediately and simply re-detected the next time it is in view:
+      * a new circle within ``link`` of an existing one refreshes it (EMA
+        position, radius relaxes toward the new measurement, age reset);
+      * a new circle far from all existing ones is appended;
+      * every call ages all circles by 1; any not re-seen within ``ttl`` calls
+        are dropped.
     Each disk carries an internal ``_age`` (calls since last seen)."""
     out = []
     for o in existing:

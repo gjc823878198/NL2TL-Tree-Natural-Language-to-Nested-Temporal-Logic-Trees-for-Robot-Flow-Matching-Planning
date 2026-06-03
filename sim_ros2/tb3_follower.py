@@ -167,16 +167,17 @@ class TB3Follower(Node):
     def _ingest_scan(self):
         if self.scan is None:
             return
-        # project the scan, cluster it into ONE disk per object (not one per grid
-        # cell), and fuse into a SHORT-MEMORY set -- so an obstacle stays a single
-        # stable disk while visible and is forgotten once well behind the robot,
-        # instead of accumulating into an ever-growing blob.
+        # project the scan, cluster it into ONE bounding circle per object (not
+        # one disk per grid cell), and keep only a SHORT memory -- an obstacle is
+        # a single stable circle while visible and is forgotten almost as soon as
+        # the robot has driven past it (re-detected next time it is in view), so
+        # the set never accumulates into an ever-growing blob.
         pts = scan_to_points(
             list(self.scan.ranges), self.scan.angle_min,
             self.scan.angle_increment, self.pose,
             range_max=min(self.sense_range, self.scan.range_max))
         clusters = cluster_points_to_disks(pts, viewpoint=self.pose[:2])
-        self.sensed = fuse_sensed(self.sensed, clusters)
+        self.sensed = fuse_sensed(self.sensed, clusters, ttl=4)
 
     def _blocked(self, plan, i, look=18):
         for (x, y) in plan[i:i + look]:
