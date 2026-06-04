@@ -62,6 +62,16 @@ class DemoGUI:
                       command=lambda e=ex: self._fill(e)
                       ).grid(row=0, column=i, padx=3, pady=4)
 
+        # environment-complexity hint for the pre-flight completability gauge
+        self.env_var = tk.StringVar(value="normal")
+        envf = tk.Frame(self.root)
+        envf.pack(fill="x", padx=12, pady=(6, 0))
+        tk.Label(envf, text="Environment (pre-flight feasibility):").grid(
+            row=0, column=0, sticky="w")
+        for j, lvl in enumerate(("open", "normal", "complex")):
+            tk.Radiobutton(envf, text=lvl, variable=self.env_var, value=lvl).grid(
+                row=0, column=j + 1, padx=4)
+
         bf = tk.Frame(self.root)
         bf.pack(pady=8)
         tk.Button(bf, text="Run task", font=("DejaVu Sans", 13, "bold"),
@@ -102,6 +112,17 @@ class DemoGUI:
         self._log(f"plan  : visit {' -> '.join(info['goal_names'])}  "
                   f"| keep_safe={info['keep_safe']} "
                   f"| deadline={info['deadline_s']:.0f}s")
+        # pre-flight completability gauge (BEFORE launching the robot)
+        try:
+            import feasibility as Feas
+            from sim_ros2.scenario import CYLINDERS
+            obs = [{"kind": "circle", "x": x, "y": y, "r": r}
+                   for (x, y, r) in CYLINDERS]
+            fe = Feas.estimate(G.START, info["goals"], info["deadline_s"],
+                               self.env_var.get(), obs)
+            self._log("check : " + Feas.summary(fe))
+        except Exception as e:
+            self._log(f"check : (gauge unavailable: {e})")
         CASE_JSON.write_text(json.dumps(case, indent=1))
         self._log(f"wrote {CASE_JSON}")
         self._stop()                          # clear any previous run

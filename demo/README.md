@@ -11,6 +11,14 @@ planner**, so you see the planning latency that the *planning-latency-aware
 deadline* (`stl_runtime.PlanLatencyModel` / `latency_aware_reach_rho`) debits from
 the timed budget.
 
+**Pre-flight completability gauge.** Before anything moves, you pick a coarse
+**environment-complexity** level (open / normal / complex) and the demo estimates
+whether the task can finish in time: it A\*-routes a collision-free path through
+the goals, scales its length for the chosen clutter, **adds the predicted planning
+latency**, and compares against the deadline — reporting *likely / tight / unlikely*
+([`feasibility.py`](feasibility.py)). It's a lightweight, planning-free feasibility
+check that complements the in-the-loop best-of-N self-check.
+
 ## Run
 
 ```bash
@@ -32,7 +40,8 @@ ros2 launch demo/launch/demo.launch.py
 | File | What it is |
 |---|---|
 | `nl_grounding.py` | NL → `nl_to_tree` (frozen LLM) → grounded planner case (shared core; offline fallback) |
-| `nl_input.py` | tkinter natural-language input box |
+| `feasibility.py` | pre-flight completability gauge (A\* path + clutter scaling + predicted planning latency vs deadline) |
+| `nl_input.py` | tkinter natural-language input box (+ environment-complexity selector) |
 | `run_2d.py` | 2D front-end: live window + PNG/GIF; latency-aware clock |
 | `run_ros.py` | ROS GUI node: NL → case JSON → launches RViz + the TurtleBot3 follower |
 | `launch/demo.launch.py` | one launch file: Gazebo world + TurtleBot3 + the NL box |

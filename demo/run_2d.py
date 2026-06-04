@@ -408,16 +408,18 @@ def main():
                          "(no LLM, no planning) -- for fast layout tweaks")
     ap.add_argument("--save-only", action="store_true",
                     help="skip the live on-screen window; just write the PNG/GIF")
+    ap.add_argument("--env", default="normal", choices=["open", "normal", "complex"],
+                    help="environment-complexity hint for the pre-flight gauge")
     args = ap.parse_args()
     import pickle
     cache = OUT / "last_run.pkl"
     if args.render_only:
         render(**pickle.loads(cache.read_bytes()))
         return
-    nl = args.nl
+    nl, env = args.nl, args.env
     if nl is None:
         from nl_input import ask_nl
-        nl = ask_nl()
+        nl, env = ask_nl()
     if not nl:
         print("no task entered; nothing to do")
         return
@@ -427,6 +429,10 @@ def main():
     print("STL  :", G.stl_string(tree))
     print("plan :", " -> ".join(info["goal_names"]),
           f"| keep_safe={info['keep_safe']} | deadline={info['deadline_s']:.0f}s")
+    # pre-flight completability gauge (BEFORE committing to the full flow run)
+    import feasibility as F
+    fe = F.estimate(G.START, info["goals"], info["deadline_s"], env, CYLS)
+    print("check:", F.summary(fe))
     live = (not _HEADLESS) and (not args.save_only)
     if live:
         print("opening live window — watch the robot drive (close it to exit)…")

@@ -18,6 +18,10 @@ during execution.
 
 > A detailed, file-by-file walkthrough (in Chinese) lives in
 > [`README.zh.md`](README.zh.md).
+>
+> 📄 **Documents in this repo:** the poster paper
+> ([`ubicomp2026poster.pdf`](ubicomp2026poster.pdf)) and the demo supplement
+> ([`demo/demo_supplement.pdf`](demo/demo_supplement.pdf)).
 
 ---
 
