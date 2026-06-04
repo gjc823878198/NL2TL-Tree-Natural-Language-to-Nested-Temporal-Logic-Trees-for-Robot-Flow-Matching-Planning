@@ -666,6 +666,39 @@ telograf_available: True
 
 ---
 
+## 8 — 自然语言 demo([`demo/`](demo/))
+
+输入一句自然语言任务,看完整 pipeline 在闭环同款地图(A/B/C 区域 + 圆柱障碍场)上跑:
+NL → 冻结 LLM 的 **STL 树** → grounding → **TeLoGraF** 规划 → 机器人**实时**执行。
+
+![2D demo](demo/demo.gif)
+
+```bash
+cd code
+export GROQ_API_KEY=gsk_...                  # 可选;不设则用离线关键词解析器
+# 2D 前端(无需 ROS):弹 NL 输入框,然后一个实时动画窗口
+python3 demo/run_2d.py
+python3 demo/run_2d.py --nl "Visit B, then A, then C, keeping safe, within 180 s" --no-llm
+# ROS 2 + Gazebo:一个 launch 开世界 + NL 输入框;提交任务后开 RViz 并驱动 TurtleBot3
+ros2 launch demo/launch/demo.launch.py
+```
+
+## 9 — planning-latency-aware deadline(本项目 contribution)
+
+规划器跑 TeLoGraF 要花真实 wall-clock(冷启动 + 每次重规划几秒),这段时间也该算进
+`F_[0,D]` 截止预算。我们**预测规划延迟并从 deadline 里扣除**:
+`ρ^lat_time = (D − t̂_plan) − t_exec`(见 `stl_runtime.py::PlanLatencyModel` /
+`latency_aware_reach_rho`)。贯通:核心门控 `planner/telograf_infer.py`、实验
+`scripts/stage2_robustness.py`、两个闭环仿真(`sim_ros2/closed_loop_demo.py`、
+`sim_ros2/tb3_follower.py`)、2D 单例 `sim2d/run_demo.py`、以及 demo。**demo 实时窗口里,
+机器人停下等规划时时钟照走、deadline 照缩**——亲眼看到延迟被计入。
+
+复现对照实验:`python3 scripts/reviewer_exp.py --n 30 --k 5`(① flat-vs-tree、② 自校正
+ablation);`python3 scripts/stage2_robustness.py --k 8`(Stage-2 + 每次规划延迟 plan_s +
+latency-aware ρ_time^lat)。
+
+---
+
 ## 接下来的方向(等当前数字落地后再上)
 
 1. **Chain-of-thought**:让模型先输出解析理由再输出 JSON,通常 +5–15% `path_f1`

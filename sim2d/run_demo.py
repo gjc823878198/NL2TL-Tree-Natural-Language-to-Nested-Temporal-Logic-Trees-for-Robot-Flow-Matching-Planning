@@ -67,10 +67,13 @@ def run_case(case: dict, *, backend: str, ckpt: str | None,
     if backend == "role":
         eff_backend = "telograf" if case.get("role") == "telograf" else "auto"
 
+    import time as _time
+    _t0 = _time.time()
     traj = plan_waypoints(case, n_steps=n_steps, ckpt=ckpt, backend=eff_backend,
                           obstacles=obstacles)
+    plan_s = _time.time() - _t0                    # planner wall-clock (seconds)
     print(f"  plan  : backend={eff_backend}  telograf_available={telograf_available()}  "
-          f"waypoints={len(traj)}")
+          f"waypoints={len(traj)}  planning={plan_s:.1f}s")
 
     # "always keep safe" as one STL predicate G(not unsafe), grounded by the
     # SAME obstacle set fed to the planner (the 2D analogue of live sensing).
@@ -82,6 +85,21 @@ def run_case(case: dict, *, backend: str, ckpt: str | None,
     print(f"  safe  : keep-safe STL  rho(G !unsafe) = {rho_ks:+.2f} "
           f"({'SAFE' if rho_ks > 0 else 'VIOLATED'}; clearance to nearest "
           f"obstacle over the path)")
+
+    # planning-latency-aware deadline (our contribution): debit the measured
+    # planner wall-clock from the case's timed-reach deadline, if any.
+    _mh = case.get("map_hint", {})
+    _deadline = _mh.get("reach_deadline_s")
+    _reaches = [(gg["x"], gg["y"], gg.get("r", 0.4))
+                for gg in case["grounding"].values()
+                if gg.get("kind", "reach") == "reach"]
+    if _deadline and _reaches:
+        from stl_runtime import PlanLatencyModel, latency_aware_reach_rho
+        _lat = PlanLatencyModel(); _lat.observe(plan_s)
+        _rl, _rn, _est, _res = latency_aware_reach_rho(
+            traj, _reaches[-1], float(_deadline), _mh.get("nominal_speed", 0.18), _lat)
+        print(f"  time  : exec {_est:.0f}s + plan {_res:.0f}s vs deadline "
+              f"{_deadline:.0f}s -> rho_time^lat={_rl:+.0f}s (naive {_rn:+.0f}s)")
 
     title = f"{case['id']}  ({eff_backend})"
     render(scene, traj, title=title, save=save, animate=animate)

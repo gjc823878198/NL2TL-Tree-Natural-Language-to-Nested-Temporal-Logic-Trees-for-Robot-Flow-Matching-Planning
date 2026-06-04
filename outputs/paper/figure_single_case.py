@@ -32,9 +32,12 @@ EXTRA = [{"kind": "circle", "x": -1.8, "y": -0.4, "r": 0.40},
 def main():
     plt.rcParams.update({"font.family": "serif", "mathtext.fontset": "cm",
                          "font.size": 12})
+    import time as _time
     case = get_case("reach_within_T")
+    _t0 = _time.perf_counter()
     traj = np.asarray(plan_waypoints(case, n_steps=120, backend="telograf",
                                      obstacles=EXTRA), float)
+    plan_s = _time.perf_counter() - _t0                # planner wall-clock (s)
     avoids = [{"kind": "circle", "x": g["x"], "y": g["y"], "r": g["r"]}
               for g in case["grounding"].values() if g.get("kind") == "avoid"]
     obs = avoids + EXTRA
@@ -45,8 +48,10 @@ def main():
     # landscape layout: square plot (left) | colorbar | SPACER | NL+STL box (right).
     # the spacer column gives the colorbar's right-side tick labels room so they
     # don't collide with the text box.
-    fig = plt.figure(figsize=(5.2, 2.7))
-    gs = fig.add_gridspec(1, 4, width_ratios=[1.0, 0.05, 0.62, 1.05], wspace=0.04)
+    # give the square trajectory plot a bigger share of the width (it is the
+    # paper's main trajectory figure now that planner panel (c) is gone).
+    fig = plt.figure(figsize=(5.9, 3.35))
+    gs = fig.add_gridspec(1, 4, width_ratios=[1.75, 0.05, 0.34, 0.72], wspace=0.04)
     ax = fig.add_subplot(gs[0, 0]); ax.set_aspect("equal")
     ax.set_xlim(-4.2, 4.2); ax.set_ylim(-4.2, 4.2)
     ax.set_xticks([]); ax.set_yticks([])
@@ -83,6 +88,9 @@ def main():
     t_arr = float(tcum[-1])                            # arrival time (s)
     rho_t, _ = plan_reach_by_deadline([tuple(p) for p in traj], reaches[0],
                                       deadline, V_NOM)
+    # planning-latency-aware margin: debit the planner's own wall-clock so the
+    # "in time" claim counts the time the planner itself spent thinking.
+    rho_t_lat = (deadline - plan_s) - t_arr
 
     pts = traj.reshape(-1, 1, 2)
     segs = np.concatenate([pts[:-1], pts[1:]], axis=1)
@@ -93,31 +101,34 @@ def main():
     ax.add_collection(lc)
     # title: SHORT + left-aligned so it stays over the plot and clears the
     # colorbar's top "(deadline)" tick label (a longer title collides with it).
-    ax.set_title(r"TeLoGraF (no A*)",
-                 fontsize=12, fontweight="bold", loc="left", pad=6)
+    # fontsize 11.5 here renders at the SAME on-page size as the (a)/(b) titles
+    # (15 pt in planner.pdf), since this figure is displayed at a larger scale.
+    ax.set_title(r"(c) TeLoGraF plan (no A*)",
+                 fontsize=11.5, fontweight="bold", loc="left", pad=6)
     cax = fig.add_subplot(gs[0, 1])
     cb = fig.colorbar(ScalarMappable(norm=plt.Normalize(0, deadline),
                                      cmap="rainbow"), cax=cax)
     cb.set_label("time (s)", fontsize=12, fontweight="bold")
     cb.set_ticks([0, round(t_arr), deadline])
-    cb.set_ticklabels(["0", f"{t_arr:.0f} (arrive)", f"{deadline:.0f} (deadline)"])
+    cb.set_ticklabels(["0", f"{t_arr:.0f}", f"{deadline:.0f}"])   # short: no overlap
     cax.tick_params(labelsize=11)
     # --- NL + STL task box: in the RIGHT column (gs[0,3]), large + bold ---
     tax = fig.add_subplot(gs[0, 3]); tax.axis("off")
-    cap = ("NL: “" + "\n".join(textwrap.wrap(case["nl"], 24)) + "”\n\n"
+    cap = ("NL: “" + "\n".join(textwrap.wrap(case["nl"], 18)) + "”\n\n"
            rf"$F_{{[0,{deadline:.0f}\,\mathrm{{s}}]}}(\mathrm{{reach}})\ \wedge\ "
            rf"G\,\neg\,\mathrm{{unsafe}}$" "\n\n"
-           rf"arrives ${t_arr:.0f}\,\mathrm{{s}}$ (in time)" "\n"
-           rf"$\rho_{{\mathrm{{time}}}}{{=}}{rho_t:+.2f}$,  "
-           rf"$\rho_{{\mathrm{{safe}}}}{{=}}{rho:+.2f}\,\mathrm{{m}}$")
+           rf"exec ${t_arr:.0f}\,\mathrm{{s}}{{+}}{plan_s:.0f}\,\mathrm{{s}}$ plan "
+           rf"({'in time' if rho_t_lat > 0 else 'late'})" "\n"
+           rf"$\rho^{{\mathrm{{lat}}}}_{{\mathrm{{time}}}}{{=}}{rho_t_lat:+.0f}\,"
+           rf"\mathrm{{s}}$,  $\rho_{{\mathrm{{safe}}}}{{=}}{rho:+.2f}\,\mathrm{{m}}$")
     tax.text(0.0, 0.5, cap, transform=tax.transAxes, ha="left", va="center",
-             fontsize=13.5, fontweight="bold",
+             fontsize=10.5, fontweight="bold",
              bbox=dict(boxstyle="round,pad=0.6", fc="#f7f7f7", ec="#bbbbbb",
                        lw=1.1))
     fig.subplots_adjust(left=0.02, right=0.99, top=0.88, bottom=0.05)
     for ext in ("png", "pdf"):
         fig.savefig(OUT_DIR / f"telograf_single.{ext}", dpi=300,
-                    bbox_inches="tight")
+                    bbox_inches="tight", pad_inches=0)
     print("wrote telograf_single; rho=%+.2f end=%s" %
           (rho, tuple(round(v, 2) for v in traj[-1])))
 

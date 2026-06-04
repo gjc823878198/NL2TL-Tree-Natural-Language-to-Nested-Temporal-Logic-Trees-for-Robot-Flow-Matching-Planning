@@ -45,7 +45,13 @@ during execution.
 4. **Execution (closed loop).** The planner re-plans from the current pose every
    5 s; an MPPI controller tracks the latest trajectory at ~7 Hz. The sound
    monitor runs online — a non-positive ρ safe-stops and re-plans (a runtime
-   shield), so a certificate failure is repaired, not merely logged.
+   shield), so a certificate failure is repaired, not merely logged. A
+   **planning-latency-aware deadline** (our contribution) predicts the planner's
+   own wall-clock and *debits it from the timed budget*
+   (`ρ^lat_time = (D − t̂_plan) − t_exec`), so a reach-by-deadline check counts the
+   time the planner itself spends thinking — the world does not freeze while we
+   plan. It is wired through the core gate (`planner/telograf_infer.py`), the
+   Stage-2 study, both closed-loop sims, and the demo.
 
 ---
 
@@ -58,13 +64,14 @@ during execution.
 | `nl_to_tree_selfcorrect.py` | Robustness-feedback self-correction loop |
 | `tree_metrics.py` / `rescore.py` | Eval metrics (exact-match, op-F1, path-F1, TED, TED-norm) |
 | `stl_robustness.py` | **Exact** (sound, non-smoothed) STL robustness — the certifier |
-| `stl_runtime.py` | Time-anchored reach-by-deadline certificate (real seconds) |
+| `stl_runtime.py` | Reach-by-deadline certificate (real seconds) + **planning-latency-aware** deadline (`PlanLatencyModel`, `latency_aware_reach_rho`) |
 | `keep_safe.py` | `G ¬unsafe` keep-safe predicate grounded by sensed disks |
-| `planner/` | Grounding + TeLoGraF adapter + `plan_waypoints()` entry point |
+| `planner/` | Grounding + TeLoGraF adapter + `plan_waypoints()` entry point (latency-aware temporal gate) |
 | `sim2d/` | 2-D matplotlib simulation (PNG/GIF demos) |
 | `sim_ros2/` | ROS 2 Humble + Gazebo Classic + TurtleBot3 **closed-loop** sim |
+| `demo/` | **Natural-language demo** front-end (2D + ROS): type a task → STL tree → plan → robot, live |
 | `outputs/` | Generated figures (including the paper figures) |
-| `scripts/` | Setup + evaluation helpers (`install_telograf.sh`, eval drivers) |
+| `scripts/` | Setup + evaluation helpers (`install_telograf.sh`, `stage2_robustness.py`, `reviewer_exp.py`) |
 | `viz_app.py` / `mobile_app.py` | Streamlit inspection tool / phone-style entry UI |
 
 Not committed (see **Setup**): `external/` (vendored TeLoGraF + checkpoint, 2.2 GB),
@@ -170,6 +177,37 @@ See [`sim_ros2/README.md`](sim_ros2/README.md) for the full troubleshooting list
 
 ---
 
+## Natural-language demo (type a task → watch the robot)
+
+The interactive demo in [`demo/`](demo/) lets you **type a plain-English task** for
+the **same map** as the closed loop (regions **A / B / C** in a cylinder field) and
+watch the full paper pipeline run: NL → frozen-LLM **STL tree** → grounded plan →
+**TeLoGraF** → the robot executes, live. The live clock keeps advancing even while
+the robot is stopped waiting for the planner, so you *see* the planning latency the
+contribution debits from the deadline.
+
+![NL2TL-Tree 2D demo: B→A→C, closed-loop, latency-aware deadline](demo/demo.gif)
+
+```bash
+cd code
+export GROQ_API_KEY=gsk_...                  # optional; omit to use the offline keyword parser
+
+# 2D front-end (no ROS): pops up an NL box, then a LIVE animated window
+python3 demo/run_2d.py
+python3 demo/run_2d.py --nl "Visit B, then A, then C, keeping safe, within 180 s" --no-llm
+
+# ROS 2 + Gazebo front-end: ONE launch file opens the world + an NL input box;
+# submitting a task opens RViz and drives the TurtleBot3.
+ros2 launch demo/launch/demo.launch.py
+```
+
+Booth-safe: with no `GROQ_API_KEY` it falls back to a deterministic keyword parser
+that yields the same STL tree for the example tasks, so the demo runs fully offline.
+The longer write-up is the **Demo Supplement** (`demo_supplement.pdf`, built from the
+LaTeX next to this repo).
+
+---
+
 ## Reproducibility
 
 These are the exact settings used in the paper.
@@ -191,6 +229,15 @@ Stage-1 parsing (preliminary, `n = 30`, no fine-tuning): exact-match **56.7%**
 TED-norm **0.84**. The op-vs-path gap shows the residual error is almost entirely
 *structural* (right operators, wrong nesting). These figures are early-stage and
 indicative, pending a larger pooled evaluation.
+
+Reproduce the paper's comparison studies:
+
+```bash
+python3 scripts/reviewer_exp.py --n 30 --k 5     # (1) flat-STL vs nested tree (fair, tree_canon)
+                                                 # (2) self-consistency / round-trip ablation
+python3 scripts/stage2_robustness.py --k 8       # Stage-2 success/robustness + per-plan latency
+                                                 #   (prints plan_s + the latency-aware rho_time^lat)
+```
 
 ---
 

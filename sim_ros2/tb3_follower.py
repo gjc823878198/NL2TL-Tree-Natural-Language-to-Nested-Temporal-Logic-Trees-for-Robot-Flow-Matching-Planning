@@ -18,7 +18,7 @@ pose.  Run AFTER `tb3_sim.launch.py` is up:
     python3 sim_ros2/tb3_follower.py --case cond_reach_either
 """
 from __future__ import annotations
-import argparse, io, contextlib, math, sys, time, threading
+import argparse, io, contextlib, json, math, sys, time, threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,7 +39,7 @@ from tf2_ros import Buffer, TransformListener
 from planner import get_case, plan_waypoints                      # noqa: E402
 from planner.telograf_infer import _obstacle_blocked              # noqa: E402
 from keep_safe import keep_safe_robustness                        # noqa: E402
-from stl_runtime import reach_by_deadline_rho                     # noqa: E402
+from stl_runtime import reach_by_deadline_rho, PlanLatencyModel   # noqa: E402
 from sim_ros2.sensor_obstacles import (scan_to_points,                # noqa: E402
                                        cluster_points_to_disks, fuse_sensed)
 
@@ -71,7 +71,12 @@ class TB3Follower(Node):
         # use SIM time so the TF timestamps (stamped in sim time by Gazebo) line
         # up with our lookups; otherwise tf2 treats every transform as stale.
         self.set_parameters([Parameter("use_sim_time", Parameter.Type.BOOL, True)])
-        self.case = get_case(args.case)
+        # a JSON case file (e.g. one built from natural language by the Demo
+        # Supplement's nl_grounding.py) overrides the named --case registry.
+        if getattr(args, "case_file", None):
+            self.case = json.loads(Path(args.case_file).read_text())
+        else:
+            self.case = get_case(args.case)
         self.sx, self.sy = self.case["map_hint"]["start"]   # world spawn
         self.reaches = _reach_targets(self.case)
         self.sense_range = args.sense_range
@@ -106,6 +111,12 @@ class TB3Follower(Node):
         self.persist_map = bool(getattr(args, "persist_map", False))
         self._map = []
         self.travelled = []
+        self._sim_t = 0.0        # current simulation time (s), shown at the robot
+        self.task_deadline_s = self.case.get("map_hint", {}).get("reach_deadline_s")
+        # planning-latency-aware robustness (our contribution): the planner spends
+        # wall-clock seconds re-planning; we predict that latency and debit the
+        # COLD-START (which blocks before driving) from the deadline budget.
+        self.plan_latency = PlanLatencyModel()
         self.create_subscription(LaserScan, "/scan", self._on_scan,
                                  qos_profile_sensor_data)
         self.create_subscription(Odometry, "/odom", self._on_odom, 10)
@@ -145,7 +156,7 @@ class TB3Follower(Node):
         self.n_force = 0
         # ---- multi-goal: visit ALL reach atoms in spec order (vs. one goal) ----
         self.visit_all = bool(getattr(args, "multi_goal", False)) or \
-            (self.case.get("id") == "closed_loop_multi")
+            (self.case.get("id") in ("closed_loop_multi", "nl_demo"))
         self.goal_queue = []
         self.goals_reached = []
         self.gi = 0
@@ -158,7 +169,7 @@ class TB3Follower(Node):
         # closest approach), so we certify collision-freedom against the true
         # cylinders -- the honest "did the robot enter a real obstacle" check.
         self._truth_obstacles = None
-        if self.case.get("id") == "closed_loop_multi":
+        if self.case.get("id") in ("closed_loop_multi", "nl_demo"):
             try:
                 from sim_ros2.scenario import CYLINDERS
                 self._truth_obstacles = [{"kind": "circle", "x": x, "y": y, "r": r}
@@ -176,6 +187,18 @@ class TB3Follower(Node):
                 self.goal_names = list(GOAL_NAMES)
             except Exception:
                 self.task_nl = self.task_stl = ""; self.goal_names = []
+        elif self.case.get("id") == "nl_demo":
+            # natural-language task (Demo Supplement): show the typed sentence,
+            # the parsed STL, and the region letters from the grounded atoms.
+            self.task_nl = self.case.get("nl", "")
+            try:
+                from stl_parser import ast_to_stl
+                self.task_stl = ast_to_stl(self.case["tree"])
+            except Exception:
+                self.task_stl = ""
+            self.goal_names = [k.replace("reach_", "").upper()
+                               for k, g in self.case.get("grounding", {}).items()
+                               if g.get("kind", "reach") == "reach"]
         else:
             self.task_nl = self.case.get("nl", "")
             self.task_stl = ""
@@ -298,7 +321,9 @@ class TB3Follower(Node):
     def _arm_leg(self, goal):
         """Plan the first reference trajectory toward `goal` from the current pose
         and set its real-seconds reach deadline (Route B).  One call per leg."""
+        t_plan0 = time.time()
         single0 = _plan(self._single_case(goal), self.pose[:2], self.sensed)
+        self.plan_latency.observe(time.time() - t_plan0)
         L0 = sum(math.hypot(single0[i][0]-single0[i-1][0],
                             single0[i][1]-single0[i-1][1])
                  for i in range(1, len(single0))) or 1.0
@@ -371,6 +396,7 @@ class TB3Follower(Node):
             t0 = time.time()
             sc = self._single_case(self.goal)
             plan = _plan(sc, self.pose[:2], list(self.sensed))
+            self.plan_latency.observe(time.time() - t0)
             with self.plan_lock:
                 self.ref_plan = plan
             self.n_replan += 1
@@ -443,6 +469,7 @@ class TB3Follower(Node):
             loop_t0 = time.time()
             rclpy.spin_once(self, timeout_sec=0.0)
             t += self.mdt
+            self._sim_t = t                          # for the RViz sim-time clock
             self._ingest_scan()
             self.travelled.append(self.pose[:2])
             # GENUINE disk entry to the CURRENT goal (dist < rr) so reach-atom
@@ -502,7 +529,7 @@ class TB3Follower(Node):
                 v, wz = self._mppi(plan, self.goal)   # MPPI -> control input
                 tw = Twist(); tw.linear.x = v; tw.angular.z = wz
                 self.cmd.publish(tw)
-            if len(self.travelled) % 6 == 0:
+            if len(self.travelled) % 3 == 0:        # ~0.45 s: smooth live RViz path
                 self._publish(plan or [])
             if len(self.travelled) % 14 == 0:        # ~2 s heartbeat: prove motion
                 self.get_logger().info(
@@ -538,6 +565,18 @@ class TB3Follower(Node):
             f"({'ALL' if n_reached == nq else 'INCOMPLETE'}); "
             f"total t={elapsed:.0f}/{total_deadline:.0f}s "
             f"({'IN-TIME' if in_time else 'LATE'})")
+        # ---- planning-latency-aware temporal certificate (our contribution) ----
+        # The planner spent this much wall-clock thinking; under concurrent
+        # re-planning only the cold-start blocks the robot, but we report the
+        # conservative margin that debits ALL of it, plus the predicted next-plan
+        # cost reserved for any future re-plan.
+        plan_wall = self.plan_latency.consumed()
+        rho_time_lat = total_deadline - plan_wall - elapsed
+        self.get_logger().info(
+            f"[CERTIFY latency-aware] planner wall-clock={plan_wall:.1f}s "
+            f"(predict next {self.plan_latency.predict_next():.1f}s); "
+            f"rho_time^lat=(deadline-planning)-exec={rho_time_lat:+.0f}s "
+            f"({'IN-TIME' if rho_time_lat > 0 else 'LATE once planning counted'})")
 
     # -- markers ----------------------------------------------------------
     def _publish(self, plan):
@@ -605,6 +644,15 @@ class TB3Follower(Node):
             lab.pose.position.z = float(gr) + 0.6
             lab.text = name
             arr.markers.append(lab)
+        # --- live simulation-time clock, floating at the robot (seconds == the
+        #     task's time unit, e.g. the "...within 120 s" deadline) ---
+        clk = base(Marker.TEXT_VIEW_FACING, "sim_time", 1.0, 0.95, 0.2, 1.0, 0.42)
+        clk.pose.position.x = float(self.pose[0]) + 0.35
+        clk.pose.position.y = float(self.pose[1]) + 0.35
+        clk.pose.position.z = 0.6
+        clk.text = (f"t = {self._sim_t:.0f} / {self.task_deadline_s:.0f} s"
+                    if self.task_deadline_s else f"t = {self._sim_t:.0f} s")
+        arr.markers.append(clk)
         self.markers.publish(arr)
 
 
@@ -613,6 +661,9 @@ def main():
     ap.add_argument("--case", default="closed_loop_multi",
                     help="planner case; default closed_loop_multi == the SAME "
                          "map+task as the 2D demo (closed_loop_demo.py)")
+    ap.add_argument("--case-file", default=None,
+                    help="path to a JSON case dict (overrides --case); the Demo "
+                         "Supplement builds one from natural language")
     ap.add_argument("--sense-range", type=float, default=3.5,
                     help="LiDAR sensing radius (m); capped at the scan's range_max. "
                          "Bigger = more obstacles in view at once (more red circles)")

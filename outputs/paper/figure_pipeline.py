@@ -45,9 +45,9 @@ def main():
         ax.add_patch(FancyArrowPatch((x0, y0), (x1, y1), arrowstyle=style,
                      mutation_scale=14, lw=lw, color=ec, zorder=2))
 
-    def tag(xc, ytop, lines, w=29):
-        h = 2.7*len(lines) + 1.8
-        box(xc - w/2, ytop - h, w, h, "\n".join(lines), MECH, MECH_E, fs=11.0,
+    def tag(xc, ytop, lines, w=27):
+        h = 2.5*len(lines) + 1.6
+        box(xc - w/2, ytop - h, w, h, "\n".join(lines), MECH, MECH_E, fs=9.6,
             bold=True)
 
     # ---- banner ----
@@ -75,18 +75,21 @@ def main():
     # stage 1: parse
     box(29, sy, 27, sh, "(1) Frozen LLM parse\n$\\rightarrow$ nested STL tree",
         ST, ST_E, fs=13.0, bold=True)
-    tag(42.5, sy-4.2, ["self-consistency vote (#1)",
-                       "round-trip scope refine (#4)",
-                       "robustness-feedback self-correct"])
+    # three mechanism tags, evenly spaced inside the block (centres 44/74.5/108.5
+    # -> equal ~4-unit gaps and ~4-unit margins to the block edges), so the left
+    # tag clears the block's left boundary.
+    tag(44, sy-4.2, ["self-consistency vote (#1)",
+                     "round-trip scope refine (#4)",
+                     "robustness-feedback self-correct"], w=28)
     # stage 2: render
     box(60, sy, 24, sh, "(2) Render robustness\nSTL $\\varphi$, diff.\\ $\\rho$",
         ST, ST_E, fs=13.0, bold=True)
-    tag(72, sy-4.2, ["operator norm.: $\\rightarrow,\\leftrightarrow\\Rightarrow$ basis",
-                     "sensor-grounded  $G\\,\\neg$unsafe"])
+    tag(74.5, sy-4.2, ["operator norm.: $\\rightarrow,\\leftrightarrow\\Rightarrow$ basis",
+                       "sensor-grounded  $G\\,\\neg$unsafe"], w=25)
     # stage 3: flow-matching planner (with denoising row)
     box(88, sy, 39, sh, "", ST, ST_E, z=3)
-    ax.text(107.5, sy+sh-2.4, "(3) Frozen flow-matching planner (TeLoGraF)",
-            ha="center", fontsize=12.5, fontweight="bold", color="#16213a", zorder=5)
+    ax.text(107.5, sy+sh-2.4, "(3) Flow-matching planner (TeLoGraF)",
+            ha="center", fontsize=12.0, fontweight="bold", color="#16213a", zorder=5)
     # GNN encoder chip
     box(90, sy+2.7, 9.5, 5.3, "GNN\nencoder", "#d7e3f2", ST_E, fs=9.6, z=5)
     # denoising / flow row x_T -> x_0
@@ -100,20 +103,22 @@ def main():
         if i < len(xs)-1:
             arr(xx+2.0, yrow, xs[i+1]-2.0, yrow, ec=GATE_E, lw=1.1)
     arr(99.5, yrow, 102.0, yrow, ec=ST_E, lw=1.1)
-    ax.text(113, sy+1.5, "flow sampling $+$ STLCG $\\nabla\\rho$ guidance",
-            ha="center", fontsize=10.2, fontweight="bold", color="#16213a", zorder=6)
-    tag(107.5, sy-4.2, ["nested-tree decomposition",
+    ax.text(109, sy+0.9, "flow sampling $+$ STLCG $\\nabla\\rho$ guidance",
+            ha="center", fontsize=10.0, fontweight="bold", color="#16213a", zorder=6)
+    tag(108.5, sy-4.2, ["nested-tree decomposition",
                         "online $\\rho$ monitor $+$ replan"], w=35)
 
     # inter-stage arrows
     arr(56, ymid, 60, ymid); arr(84, ymid, 88, ymid)
 
-    # feasibility self-check -> A* fallback (above stage 3)
-    box(95, 55, 25, 5.8, "feasibility self-check (best-of-$N$)", GATE, GATE_E, fs=10.8, z=4)
-    arr(107.5, sy+sh, 107.5, 55, ec=GATE_E, lw=1.1)
-    box(122.5, 55, 6.8, 5.8, "A*", ALT, ALT_E, fs=11.5, bold=True, z=4)
-    arr(120, 57.9, 122.5, 57.9, ec=ALT_E, lw=1.2)
-    ax.text(121, 62.4, "OOD", ha="center", fontsize=9.6, fontweight="bold",
+    # feasibility self-check -> A* fallback (above stage 3); compact 2-line label
+    # that stays inside the box.
+    box(95, 52.5, 23, 7.5, "feasibility self-check\n(best-of-$N$)", GATE, GATE_E,
+        fs=8.8, z=4)
+    arr(107.5, sy+sh, 107.5, 52.5, ec=GATE_E, lw=1.1)
+    box(122, 53.5, 7, 6, "A*", ALT, ALT_E, fs=11, bold=True, z=4)
+    arr(118, 56.5, 122, 56.5, ec=ALT_E, lw=1.2)
+    ax.text(125.5, 61.2, "OOD", ha="center", fontsize=9.2, fontweight="bold",
             color="#b03a2e")
 
     # input -> pipeline (horizontal, level with the inter-stage arrows)

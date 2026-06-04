@@ -32,6 +32,7 @@ from __future__ import annotations
 import math
 import os
 import sys
+import time
 from pathlib import Path
 from typing import List, Tuple
 
@@ -1082,6 +1083,7 @@ def plan_waypoints(case: dict | str,
                      fallback honours this argument; TeLoGraF reads
                      obstacles off the encoded STL graph.
     """
+    _t_plan_start = time.perf_counter()        # planner wall-clock (latency-aware gate)
     if isinstance(case, str):
         case = get_case(case)
 
@@ -1110,27 +1112,36 @@ def plan_waypoints(case: dict | str,
     # shape while guaranteeing the reach predicate is met.
     result = _pin_reaches(traj, case)
 
-    # Temporal gate (Route B).  When the case carries a real-seconds reach
-    # deadline, anchor the plan to wall-clock time (arclength / nominal speed)
-    # and certify reach-by-deadline with the EXACT, sound monitor.  If the flow
-    # plan is too slow to meet it, prefer the shorter A* path that does -- so the
-    # planner is gated on the timed spec, not only the spatial one.
+    # Temporal gate (Route B), PLANNING-LATENCY-AWARE.  When the case carries a
+    # real-seconds reach deadline, anchor the plan to wall-clock time and certify
+    # reach-by-deadline with the EXACT, sound monitor -- but DEBIT the planner's
+    # own wall-clock (the world waits while we plan) from the deadline budget, so
+    # the gate does not assume planning is free.  If the flow plan is too slow to
+    # meet the latency-aware deadline, prefer the A* path that does.
     mh = case.get("map_hint", {})
     if mh.get("reach_deadline_s") and backend != "fallback":
-        from stl_runtime import plan_reach_by_deadline
+        from stl_runtime import latency_aware_reach_rho, PlanLatencyModel
         targets = _seq_reach_targets(case)
         if targets:
             goal = targets[-1]
             v_nom = float(mh.get("nominal_speed", 0.18))
             deadline = float(mh["reach_deadline_s"])
-            rho_t, est = plan_reach_by_deadline(result, goal, deadline, v_nom)
+            plan_lat = time.perf_counter() - _t_plan_start    # flow planning wall-clock
+            lat = PlanLatencyModel(); lat.observe(plan_lat)
+            rho_t, rho_naive, est, reserved = latency_aware_reach_rho(
+                result, goal, deadline, v_nom, lat)
             if rho_t <= 0.0:
+                t_alt0 = time.perf_counter()
                 alt = _pin_reaches(
                     _robustness_path(case, n_steps, extra_obstacles=obstacles), case)
-                rho_a, est_a = plan_reach_by_deadline(alt, goal, deadline, v_nom)
-                print(f"[plan] temporal gate: flow ~{est:.0f}s (rho={rho_t:+.2f}) "
-                      f"misses {deadline:.0f}s deadline; A* ~{est_a:.0f}s "
-                      f"(rho={rho_a:+.2f})", file=sys.stderr)
+                lat_a = PlanLatencyModel()
+                lat_a.observe(plan_lat + (time.perf_counter() - t_alt0))
+                rho_a, _rn_a, est_a, _res_a = latency_aware_reach_rho(
+                    alt, goal, deadline, v_nom, lat_a)
+                print(f"[plan] latency-aware temporal gate: flow ~{est:.0f}s exec "
+                      f"+ {reserved:.0f}s plan (rho^lat={rho_t:+.2f}, naive "
+                      f"{rho_naive:+.2f}) misses {deadline:.0f}s deadline; "
+                      f"A* (rho^lat={rho_a:+.2f})", file=sys.stderr)
                 if rho_a > rho_t:
                     result = alt
     return result

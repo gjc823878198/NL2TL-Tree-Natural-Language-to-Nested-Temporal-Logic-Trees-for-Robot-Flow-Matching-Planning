@@ -82,3 +82,71 @@ def plan_reach_by_deadline(plan: Sequence[Pt],
     uni = resample_by_time(plan, dt, speed)
     est = (len(uni) - 1) * dt
     return reach_by_deadline_rho(goal, uni, dt, deadline_s), est
+
+
+# --------------------------------------------------------------------------
+# Planning-latency-aware timed robustness  (our contribution)
+#
+# The reach-by-deadline robustness above compares the path's EXECUTION time to
+# the deadline and implicitly assumes planning is free -- i.e. that wall-clock
+# time *freezes* while the planner thinks.  It does not: the flow-matching
+# planner pays a model cold-start on the first call and a few seconds per
+# re-plan, all of which also count against a "reach within D seconds" deadline.
+# We PREDICT that planning latency and DEBIT it from the temporal budget, so the
+# timed guarantee stays honest, and we hand the *tightened* deadline back to the
+# next re-plan so subsequent trajectories are planned against the time that will
+# actually remain.
+# --------------------------------------------------------------------------
+
+class PlanLatencyModel:
+    """Online predictor of the planner's wall-clock latency.
+
+    The first call is slow (model cold-start); warm re-plans are faster, so an
+    EMA over observed plan durations (cold-start-seeded) predicts the next plan's
+    cost.  ``consumed()`` is the wall-clock already spent planning this episode;
+    ``reserve(n)`` is what to debit from the budget now -- everything already
+    spent plus a prediction for ``n`` re-plans still expected on this leg."""
+
+    def __init__(self, cold_start_s: float = 12.0, ema: float = 0.4):
+        self._est = float(cold_start_s)
+        self._ema = float(ema)
+        self._n = 0
+        self._total = 0.0
+
+    def observe(self, dt_s: float) -> None:
+        dt_s = max(0.0, float(dt_s))
+        self._est = dt_s if self._n == 0 else \
+            (1.0 - self._ema) * self._est + self._ema * dt_s
+        self._n += 1
+        self._total += dt_s
+
+    def predict_next(self) -> float:
+        return self._est
+
+    def consumed(self) -> float:
+        return self._total
+
+    def reserve(self, n_future_replans: int = 0) -> float:
+        return self._total + max(0, int(n_future_replans)) * self._est
+
+
+def latency_aware_reach_rho(plan: Sequence[Pt],
+                            goal: Tuple[float, float, float],
+                            deadline_s: float, speed: float,
+                            latency: "PlanLatencyModel",
+                            *, n_future_replans: int = 0,
+                            dt: float = 0.15) -> Tuple[float, float, float, float]:
+    """Planning-latency-aware reach-by-deadline robustness (our contribution).
+
+        rho_latency = (deadline - reserved_planning_time) - execution_time
+                    = rho_naive_time - reserved_planning_time.
+
+    Returns ``(rho_latency_s, rho_naive_time_s, est_exec_s, reserved_s)``.  The
+    naive temporal margin ignores planning cost; ours debits the predicted plan
+    wall-clock, so ``rho_latency <= rho_naive`` always and a plan that "arrives
+    in time" on paper but blows the deadline once its own planning latency is
+    counted is correctly flagged (``rho_latency <= 0``)."""
+    _, est = plan_reach_by_deadline(plan, goal, deadline_s, speed, dt)
+    reserved = latency.reserve(n_future_replans)
+    rho_naive_time = deadline_s - est
+    return rho_naive_time - reserved, rho_naive_time, est, reserved

@@ -157,9 +157,9 @@ def ast_to_stl(node: dict) -> str:
     if op == "until":
         return f"({kids[0]}) U{iv_s} ({kids[1]})"
     if op == "and":
-        return "(" + " & ".join(kids) + ")"
+        return "(" + " & ".join(f"({k})" for k in kids) + ")"
     if op == "or":
-        return "(" + " | ".join(kids) + ")"
+        return "(" + " | ".join(f"({k})" for k in kids) + ")"
     if op == "imply":
         return f"({kids[0]}) -> ({kids[1]})"
     if op == "iff":

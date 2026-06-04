@@ -19,7 +19,7 @@ Outputs (top-down, RViz marker colours):
     python3 sim_ros2/closed_loop_demo.py
 """
 from __future__ import annotations
-import io, contextlib, math, sys, textwrap
+import io, contextlib, math, sys, textwrap, time
 from pathlib import Path
 import numpy as np
 import matplotlib
@@ -55,11 +55,17 @@ def _single_case(goal):
                          "style": "telograf_native", "telograf_samples": 8}}
 
 
+_PLAN_LAT = []          # wall-clock of each TeLoGraF plan this episode (seconds)
+
+
 def _plan(start_xy, goal, obstacles):
     c = _single_case(goal); c["map_hint"]["start"] = list(start_xy)
+    t0 = time.time()
     with contextlib.redirect_stdout(io.StringIO()):
-        return [tuple(p) for p in plan_waypoints(c, n_steps=90, backend="telograf",
-                                                 obstacles=obstacles)]
+        out = [tuple(p) for p in plan_waypoints(c, n_steps=90, backend="telograf",
+                                                obstacles=obstacles)]
+    _PLAN_LAT.append(time.time() - t0)            # the world waits while we plan
+    return out
 
 
 def _sense(x, y, sensed):
@@ -82,6 +88,7 @@ def _remaining_blocked(plan, idx, obstacles):
 
 def run():
     S.print_task()                              # show the task this run completes
+    _PLAN_LAT.clear()                           # reset planning-latency accumulator
     x, y = START
     yaw = 0.0
     travelled = [(x, y)]
@@ -123,7 +130,7 @@ def run():
         if not reached:
             goal_arrivals.append((S.GOAL_NAMES[gi] + "(missed)", len(travelled)))
     rho = keep_safe_robustness(CYLS, travelled)
-    return travelled, replan_pts, sensed, goal_arrivals, rho
+    return travelled, replan_pts, sensed, goal_arrivals, rho, sum(_PLAN_LAT)
 
 
 # --------------------------- rendering ---------------------------
@@ -153,7 +160,7 @@ def _draw_world(ax, replan_pts, title):
         ax.plot(*rp, marker="X", ms=10, color="#8e44ad", zorder=7)
 
 
-def render(travelled, replan_pts, sensed, goal_arrivals, rho):
+def render(travelled, replan_pts, sensed, goal_arrivals, rho, plan_s=0.0):
     OUT.mkdir(parents=True, exist_ok=True)
     from matplotlib.cm import ScalarMappable
     V_NOM = S.NOMINAL_SPEED
@@ -164,11 +171,14 @@ def render(travelled, replan_pts, sensed, goal_arrivals, rho):
     t_arr = float(tcum[-1])
     n_reached = sum(1 for (n, _) in goal_arrivals if "missed" not in n)
     order = r"$\to$".join(S.GOAL_NAMES)
+    # latency-aware deadline (our contribution): debit the planner wall-clock.
+    rho_lat = (deadline - plan_s) - t_arr
     title = (rf"Closed-loop multi-goal ({order}) through a uniform "
              rf"cylinder field" "\n"
              rf"visited {n_reached}/{len(GOALS)} goals,  "
              rf"$\rho_{{\mathrm{{safe}}}}={rho:+.2f}$ m,  "
-             rf"finish {t_arr:.0f} s $<$ {deadline:.0f} s deadline")
+             rf"exec {t_arr:.0f} s $+$ plan {plan_s:.0f} s vs {deadline:.0f} s  "
+             rf"($\rho^{{\mathrm{{lat}}}}_{{\mathrm{{time}}}}{{=}}{rho_lat:+.0f}$ s)")
     # --- static top-down ---
     fig, ax = plt.subplots(figsize=(6.8, 6.4))
     _draw_world(ax, replan_pts, title)
@@ -223,5 +233,5 @@ def render(travelled, replan_pts, sensed, goal_arrivals, rho):
 
 
 if __name__ == "__main__":
-    travelled, replan_pts, sensed, goal_arrivals, rho = run()
-    render(travelled, replan_pts, sensed, goal_arrivals, rho)
+    travelled, replan_pts, sensed, goal_arrivals, rho, plan_s = run()
+    render(travelled, replan_pts, sensed, goal_arrivals, rho, plan_s)

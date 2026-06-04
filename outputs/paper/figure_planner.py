@@ -62,8 +62,12 @@ def _weave_case():
 def main():
     plt.rcParams.update({"font.family": "serif", "mathtext.fontset": "cm",
                          "font.size": 13.5})
-    fig = plt.figure(figsize=(16.8, 4.15))
-    gs = fig.add_gridspec(1, 3, width_ratios=[1.0, 1.5, 1.12], wspace=0.10)
+    # two panels only: (a) tree + (b) planner.  The trajectory panel was dropped
+    # -- the deployed timed-task trajectory is Fig.~\ref{fig:single} (telograf_
+    # single), so a third trajectory panel here was redundant; two wider panels
+    # leave more room for the labels (no internal squeeze).
+    fig = plt.figure(figsize=(11.6, 4.8))
+    gs = fig.add_gridspec(1, 2, width_ratios=[1.0, 1.55], wspace=0.08)
 
     # ---------- (a) nested STL tree ----------
     ax = fig.add_subplot(gs[0, 0]); ax.axis("off")
@@ -142,47 +146,10 @@ def main():
     ax.set_title("(b) Frozen flow-matching planner $+$ robustness guidance",
                  fontsize=15, fontweight="bold")
 
-    # ---------- (c) REAL weave plan through an obstacle cluster ----------
-    ax = fig.add_subplot(gs[0, 2])
-    ax.set_aspect("equal", adjustable="datalim")     # fill box -> aligns (a)(b)
-    side_obs = [{"kind": "circle", "x": x, "y": y, "r": r} for (x, y, r) in SIDE]
-    traj = np.asarray(plan_waypoints(_weave_case(), n_steps=140,
-                                     backend="telograf", obstacles=side_obs),
-                      float)
-    all_obs = ([{"kind": "circle", "x": x, "y": y, "r": r}
-                for (x, y, r) in CENTER] + side_obs)
-    rho = keep_safe_robustness(all_obs, traj)
-    ax.set_xlim(-3.2, 3.2); ax.set_ylim(-3.8, 3.8)
-    ax.set_xticks([]); ax.set_yticks([])
-    for sp in ax.spines.values():
-        sp.set_edgecolor("#999")
-    for (x, y, r) in CENTER + SIDE:
-        ax.add_patch(Circle((x, y), r, facecolor=AVOID, edgecolor="#3a4250",
-                            alpha=0.55, lw=0.8))
-    ax.add_patch(Circle(GOAL[:2], GOAL[2], facecolor="#f4d35e",
-                        edgecolor="#caa83a", alpha=0.6, lw=1.0))
-    ax.plot(GOAL[0], GOAL[1], marker="*", ms=18, color="#b8860b",
-            markeredgecolor="k", markeredgewidth=0.5, zorder=6)
-    ax.plot(START[0], START[1], marker="s", ms=10, color="k", zorder=6)
-    pts = traj.reshape(-1, 1, 2)
-    segs = np.concatenate([pts[:-1], pts[1:]], axis=1)
-    lc = LineCollection(segs, cmap="rainbow", norm=plt.Normalize(0, 1),
-                        linewidth=3.4, capstyle="round", zorder=5)
-    lc.set_array(np.linspace(0, 1, len(segs)))
-    ax.add_collection(lc)
-    ax.annotate(rf"$\rho(G\neg$unsafe$)={rho:+.2f}$", (0.0, -3.3),
-                textcoords="offset points", xytext=(10, -2), fontsize=11,
-                fontweight="bold", color="#1e7a46")
-    ax.text(0.02, 0.98, "colour $=$ time", transform=ax.transAxes, ha="left",
-            va="top", fontsize=10, fontweight="bold", color="#555")
-    ax.set_title("(c) Real flow plan slaloming a cluster",
-                 fontsize=15, fontweight="bold")
-
     fig.subplots_adjust(left=0.01, right=0.99, top=0.86, bottom=0.04)
     for ext in ("png", "pdf"):
-        fig.savefig(OUT / f"planner.{ext}", dpi=300, bbox_inches="tight")
-    print("wrote", OUT / "planner.png", "rho_keepsafe=%+.2f" % rho,
-          "end=", tuple(round(v, 2) for v in traj[-1]))
+        fig.savefig(OUT / f"planner.{ext}", dpi=300, bbox_inches="tight", pad_inches=0)
+    print("wrote", OUT / "planner.png")
 
 
 if __name__ == "__main__":
