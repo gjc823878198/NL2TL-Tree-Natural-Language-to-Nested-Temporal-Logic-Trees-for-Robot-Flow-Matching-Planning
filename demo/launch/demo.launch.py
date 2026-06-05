@@ -15,9 +15,10 @@ natural-language input box (demo/run_ros.py). You then:
     # offline parse (no GROQ_API_KEY):
     ros2 launch "Demo supplement/demo/launch/demo.launch.py" llm:=false
 
-The Gazebo world + robot + map->odom TF are started here; RViz and the follower
-are started BY the GUI when you submit a task (so RViz opens with the task, as
-asked). The map+task are identical to the closed-loop simulation.
+The Gazebo world + robot + map->odom TF + RViz are started here at launch (RViz
+shows the same markers.rviz as the closed-loop sim); the TeLoGraF follower is
+started by the GUI when you submit a task. The map+task are identical to the
+closed-loop simulation.
 """
 import os
 import sys
@@ -98,8 +99,16 @@ def _setup(context, *args, **kwargs):
         name="map_to_odom_static", output="log",
         arguments=["--x", "0", "--y", "0", "--z", "0",
                    "--frame-id", "map", "--child-frame-id", "odom"]))
-    # the natural-language GUI (opens RViz + the follower when a task is submitted)
-    gui_cmd = [sys.executable, str(DEMO / "run_ros.py")]
+    # RViz up FROM STARTUP (same markers.rviz as the closed-loop sim): it shows
+    # /ubicomp/markers -- start, goals, planned path, travelled history, sense
+    # ring, sim clock -- as soon as the follower runs.  Launched here (not by the
+    # GUI) so it appears immediately on `ros2 launch`, exactly like tb3_sim.
+    actions.append(Node(
+        package="rviz2", executable="rviz2", name="rviz2_markers", output="screen",
+        arguments=["-d", str(CODE / "sim_ros2" / "gui" / "markers.rviz")]))
+    # the natural-language GUI (--no-rviz: RViz is already open above; the GUI
+    # starts only the TeLoGraF follower when a task is submitted)
+    gui_cmd = [sys.executable, str(DEMO / "run_ros.py"), "--no-rviz"]
     if not llm:
         gui_cmd.append("--no-llm")
     actions.append(ExecuteProcess(cmd=gui_cmd, output="screen"))

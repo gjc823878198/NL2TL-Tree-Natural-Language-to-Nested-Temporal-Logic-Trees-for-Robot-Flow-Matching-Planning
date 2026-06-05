@@ -37,11 +37,12 @@ from nl_input import EXAMPLES                                       # noqa: E402
 
 
 class DemoGUI:
-    def __init__(self, model: str, use_llm: bool):
+    def __init__(self, model: str, use_llm: bool, launch_rviz: bool = True):
         import tkinter as tk
         self.tk = tk
         self.model = model
         self.use_llm = use_llm
+        self.launch_rviz = launch_rviz        # False when the launch file opened RViz
         self.procs = []                       # spawned follower / rviz
         self.root = tk.Tk()
         self.root.title("NL2TL-Tree demo — natural-language task")
@@ -151,7 +152,8 @@ class DemoGUI:
         # the TRAVELLED history trajectory, the sense ring and the sim clock --
         # and stays up across tasks (re-opened only if the attendee closed it), so
         # the demo's RViz matches the closed-loop simulation exactly.
-        if getattr(self, "rviz", None) is None or self.rviz.poll() is not None:
+        if self.launch_rviz and (getattr(self, "rviz", None) is None
+                                 or self.rviz.poll() is not None):
             self.rviz = subprocess.Popen(["rviz2", "-d", str(RVIZ_CFG)], env=env)
             self._log("opened RViz (persistent) — shows the live + history "
                       "trajectory, same as the closed-loop sim")
@@ -184,8 +186,11 @@ def main():
     ap.add_argument("--no-llm", action="store_true",
                     help="use the offline keyword parser instead of Groq")
     ap.add_argument("--model", default=G.DEFAULT_MODEL)
+    ap.add_argument("--no-rviz", action="store_true",
+                    help="don't open RViz from the GUI (the launch file already did)")
     args = ap.parse_args()
-    DemoGUI(model=args.model, use_llm=not args.no_llm).run()
+    DemoGUI(model=args.model, use_llm=not args.no_llm,
+            launch_rviz=not args.no_rviz).run()
 
 
 if __name__ == "__main__":
