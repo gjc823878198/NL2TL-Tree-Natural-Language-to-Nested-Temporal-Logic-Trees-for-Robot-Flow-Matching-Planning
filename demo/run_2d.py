@@ -215,6 +215,25 @@ def _draw_world(ax, goals, goal_names, replan_pts, title):
         ax.plot(*rp, marker="X", ms=10, color="#8e44ad", zorder=7)
 
 
+def _draw_tb3(ax, cx, cy, r, zorder=8):
+    """Top-down TurtleBot3 sticker (round base + two wheels + LiDAR dome) drawn
+    on a reached goal, to make clear the robot arrives INSIDE the target region
+    (the per-leg path stops at the disk edge)."""
+    ww, wl = 0.30 * r, 0.95 * r                      # wheel width / length
+    for sx in (-1, 1):                               # left & right wheels (black)
+        ax.add_patch(mp.Rectangle((cx + sx * 0.92 * r - ww / 2, cy - wl / 2),
+                                  ww, wl, facecolor="#15181d", edgecolor="#000",
+                                  lw=0.6, zorder=zorder))
+    ax.add_patch(mp.Circle((cx, cy), r, facecolor="#5a6475",              # base plate
+                           edgecolor="#11151c", lw=1.3, zorder=zorder + 1))
+    ax.add_patch(mp.Circle((cx, cy), 0.46 * r, facecolor="#17a589",        # LiDAR dome
+                           edgecolor="#0b5345", lw=1.0, zorder=zorder + 2))
+    ax.add_patch(mp.Circle((cx, cy), 0.17 * r, facecolor="#0b5345",        # hub
+                           zorder=zorder + 3))
+    ax.add_patch(mp.Circle((cx, cy + 0.7 * r), 0.12 * r, facecolor="#f4d03f",  # front
+                           edgecolor="#7d6608", lw=0.5, zorder=zorder + 3))
+
+
 def render(nl, tree, info, travelled, replan_pts, arrivals, rho, used_llm,
            plan_s=0.0):
     OUT.mkdir(parents=True, exist_ok=True)
@@ -250,6 +269,12 @@ def render(nl, tree, info, travelled, replan_pts, arrivals, rho, used_llm,
                         linewidth=3.0, zorder=5)
     lc.set_array(0.5 * (tcum[:-1] + tcum[1:]))
     ax.add_collection(lc)
+    # TurtleBot3 sticker on each reached goal -- the robot arrives INSIDE the
+    # region even though the per-leg path stops at the disk edge.
+    for gi, (nm, _) in enumerate(arrivals):
+        if gi < len(goals) and "missed" not in nm:
+            gx, gy, gr = goals[gi][0], goals[gi][1], goals[gi][2]
+            _draw_tb3(ax, gx, gy, min(0.9 * gr, 0.42))
     cb = fig.colorbar(ScalarMappable(norm=plt.Normalize(0, deadline),
                                      cmap="rainbow"), ax=ax,
                       fraction=0.046, pad=0.04)
@@ -300,6 +325,56 @@ def render(nl, tree, info, travelled, replan_pts, arrivals, rho, used_llm,
     print(f"  parse={parse_tag}; visited={n_reached}/{len(goals)} "
           f"{[n for n, _ in arrivals]}; rho_safe={rho:+.2f}m; "
           f"replans={len(replan_pts)}; finish={t_arr:.0f}s/{deadline:.0f}s")
+
+
+def render_selfcheck(info, rep):
+    """Visualise the best-of-N OOD self-check (paper Fig.~1): the candidate
+    prior trajectories + which goals even the best candidate cannot reach -- i.e.
+    *why* a spec is out-of-distribution and we defer to A* / decompose.
+    Saved to outputs/nl_demo_2d_selfcheck.png (only when the flow backend ran)."""
+    if not rep.get("available"):
+        return None
+    OUT.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(6.6, 6.8))
+    xmin, xmax, ymin, ymax = G.WORLD_BOUNDS
+    ax.set_xlim(xmin, xmax); ax.set_ylim(ymin, ymax + 0.7)
+    ax.set_aspect("equal"); ax.grid(alpha=0.25); ax.tick_params(labelsize=12)
+    feas = rep["feasible"]
+    ax.set_title("Best-of-%d self-check:  %s\nbest per-atom shortfall %.2f m "
+                 "(OOD if $>$%.1f m),  satisfy-rate %.0f%%"
+                 % (rep["n_samples"],
+                    "FEASIBLE — flow" if feas else "OOD — defer to A*",
+                    rep["best_shortfall"], rep["tol"], 100 * rep["satisfy_rate"]),
+                 fontsize=12.5, fontweight="bold", pad=12,
+                 color="#1e7a46" if feas else "#b03a2e")
+    for c in CYLS:                                          # sensed obstacles
+        ax.add_patch(mp.Circle((c["x"], c["y"]), c["r"], facecolor="#e74c3c",
+                     alpha=0.30, edgecolor="#922b21", lw=0.8, zorder=1))
+    for s in rep["candidates"]:                            # N prior candidates
+        xs = [p[0] for p in s]; ys = [p[1] for p in s]
+        ax.plot(xs, ys, "-", color="#9aa0a6", lw=0.8, alpha=0.5, zorder=3)
+    if rep.get("best"):                                    # best candidate
+        ax.plot([p[0] for p in rep["best"]], [p[1] for p in rep["best"]],
+                "-", color="#2c6fbb", lw=2.4, zorder=5, label="best-of-N prior")
+    for g in rep["per_goal"]:                              # goals: reached / missed
+        ok = g["reached"]
+        ax.add_patch(mp.Circle((g["x"], g["y"]), g["r"], facecolor="none",
+                     edgecolor="#1e7a46" if ok else "#b03a2e", lw=2.4, zorder=6))
+        ax.plot(g["x"], g["y"], marker="*", ms=15,
+                color="#1e7a46" if ok else "#b03a2e",
+                markeredgecolor="k", markeredgewidth=0.5, zorder=7)
+        if not ok:
+            ax.text(g["x"], g["y"] + g["r"] + 0.18,
+                    f"miss {g['shortfall']:.1f} m", ha="center", fontsize=11,
+                    fontweight="bold", color="#b03a2e", zorder=8)
+    ax.plot(*G.START, marker="s", ms=11, color="k", zorder=7)
+    ax.text(G.START[0], G.START[1] - 0.45, "start", ha="center", fontsize=11)
+    ax.legend(loc="lower center", fontsize=10, framealpha=0.9)
+    fig.savefig(OUT / "nl_demo_2d_selfcheck.png", dpi=150, bbox_inches="tight",
+                pad_inches=0.05)
+    plt.close(fig)
+    print(f"wrote {OUT/'nl_demo_2d_selfcheck.png'}")
+    return OUT / "nl_demo_2d_selfcheck.png"
 
 
 def live_run(goals, goal_names, info, nl, tree, used_llm):
@@ -410,6 +485,8 @@ def main():
                     help="skip the live on-screen window; just write the PNG/GIF")
     ap.add_argument("--env", default="normal", choices=["open", "normal", "complex"],
                     help="environment-complexity hint for the pre-flight gauge")
+    ap.add_argument("--no-selfcheck", action="store_true",
+                    help="skip the best-of-N OOD self-check visualization")
     args = ap.parse_args()
     import pickle
     cache = OUT / "last_run.pkl"
@@ -433,6 +510,14 @@ def main():
     import feasibility as F
     fe = F.estimate(G.START, info["goals"], info["deadline_s"], env, CYLS)
     print("check:", F.summary(fe))
+    # best-of-N OOD self-check (paper Fig.~1): sample the flow prior for the whole
+    # task and report/visualise whether it is in-distribution or must defer to A*.
+    if not args.no_selfcheck:
+        import selfcheck as SC
+        sc = SC.run(info, obstacles=CYLS, world_bounds=G.WORLD_BOUNDS,
+                    start=G.START)
+        print("self :", SC.summary(sc))
+        render_selfcheck(info, sc)
     live = (not _HEADLESS) and (not args.save_only)
     if live:
         print("opening live window — watch the robot drive (close it to exit)…")

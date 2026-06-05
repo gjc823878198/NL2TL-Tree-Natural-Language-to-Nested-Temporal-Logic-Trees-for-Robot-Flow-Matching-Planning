@@ -140,15 +140,19 @@ def main():
     txs = [1, 35, 69]                       # 1-31, 35-65, 69-99  (gap 3)
     for x, t in zip(txs, tags):
         box(x, 24, 30, 13, t, MECH, MECH_E, fs=10.5, bold=True)
-    ax.text(50, 15, r"$\rho(G\varphi)=\min_t\rho(\varphi,t),\;\;"
-            r"\rho(F\varphi)=\max_t\rho(\varphi,t),\;\;\rho>0 \Rightarrow$ satisfied",
-            ha="center", fontsize=11, fontweight="bold", color="#333")
+    # render this formula with the STIX math fontset, whose \mathbf DOES bold
+    # Greek (cm's does not) -- per-text, so the rest of the figure stays cm.
+    ax.text(50, 14, r"$\mathbf{\rho(G\varphi)=\min_t\rho(\varphi,t),\;\;"
+            r"\rho(F\varphi)=\max_t\rho(\varphi,t),\;\;\rho>0 \Rightarrow}$ "
+            r"$\mathbf{satisfied}$",
+            ha="center", fontsize=15, fontweight="bold", color="#111",
+            math_fontfamily="stix")
     ax.set_title("(b) Frozen flow-matching planner $+$ robustness guidance",
                  fontsize=15, fontweight="bold")
 
     fig.subplots_adjust(left=0.01, right=0.99, top=0.86, bottom=0.04)
     for ext in ("png", "pdf"):
-        fig.savefig(OUT / f"planner.{ext}", dpi=300, bbox_inches="tight", pad_inches=0)
+        fig.savefig(OUT / f"planner.{ext}", dpi=300, bbox_inches="tight", pad_inches=0.04)
     print("wrote", OUT / "planner.png")
 
 

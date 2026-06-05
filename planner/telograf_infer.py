@@ -226,7 +226,7 @@ def _telograf_subprocess(case: dict, n_steps: int, ckpt: str | None,
     # decomposed into a sparse set of bounding circles.
     refine_obstacles = [{"x": g["x"], "y": g["y"], "r": g["r"]}
                         for g in augmented["grounding"].values()
-                        if g.get("kind") == "avoid"]
+                        if g.get("kind") == "avoid" and "x" in g]
     for (ox, oy, orr) in _obstacles_to_disks(extra_obstacles or []):
         refine_obstacles.append({"x": ox, "y": oy, "r": orr})
 
@@ -545,6 +545,51 @@ def telograf_feasibility(case: dict | str, n_steps: int = 64,
     report = _samples_feasibility(samples, case, extra_obstacles or [])
     report["case"] = case["id"]
     return report
+
+
+def telograf_selfcheck(case: dict | str, n_steps: int = 64,
+                       ckpt: str | None = None,
+                       extra_obstacles: List[dict] | None = None,
+                       n_samples: int | None = None) -> dict:
+    """Best-of-N feasibility / OOD self-check that ALSO returns the candidate
+    trajectories and per-goal reach-shortfall, so the demo can VISUALISE *why*
+    a spec is out-of-distribution for the frozen flow prior (paper Fig.~1's
+    ``best-of-N self-check'').
+
+    Returns a dict with: ``available`` (False iff the flow backend is missing --
+    the demo then reports it rather than faking a result), ``feasible``,
+    ``engine`` ("flow" | "A* (OOD)"), ``satisfy_rate``, ``best_shortfall`` (best
+    per-atom reach-shortfall, m), ``tol`` (= SAT_COST_TOL), ``n_samples``,
+    ``candidates`` (the raw prior trajectories), ``per_goal`` (per reach goal:
+    x/y/r/shortfall/reached for the BEST candidate) and ``worst_goal`` (index of
+    the goal the best candidate misses by the most)."""
+    if isinstance(case, str):
+        case = get_case(case)
+    obstacles = extra_obstacles or []
+    reaches = _seq_reach_targets(case)
+    if not telograf_available():
+        return {"available": False, "reaches": reaches}
+    ns = n_samples or int(case.get("map_hint", {}).get("telograf_samples", 16))
+    samples = _telograf_subprocess(case, n_steps, ckpt, extra_obstacles=obstacles,
+                                   n_samples=ns, return_all=True)
+    cand = [[(float(x), float(y)) for x, y in s] for s in samples]
+    rep = _samples_feasibility(cand, case, obstacles)
+    best = min(cand, key=lambda s: _traj_reach_cost(s, case)) if cand else []
+    per_goal, worst = [], (-1, -1.0)
+    for gi, (gx, gy, gr) in enumerate(reaches):
+        d = min((math.hypot(px - gx, py - gy) for px, py in best),
+                default=float("inf"))
+        sf = max(0.0, d - gr)
+        per_goal.append({"x": gx, "y": gy, "r": gr, "shortfall": sf,
+                         "reached": sf <= SAT_COST_TOL})
+        if sf > worst[1]:
+            worst = (gi, sf)
+    return {"available": True, "feasible": rep["feasible"],
+            "engine": "flow" if rep["feasible"] else "A* (OOD)",
+            "satisfy_rate": rep["satisfy_rate"], "best_shortfall": rep["best_cost"],
+            "tol": SAT_COST_TOL, "n_samples": rep["n_samples"],
+            "candidates": cand, "best": best, "per_goal": per_goal,
+            "worst_goal": worst[0]}
 
 
 def _telograf_plan(case: dict, n_steps: int, ckpt: str | None,

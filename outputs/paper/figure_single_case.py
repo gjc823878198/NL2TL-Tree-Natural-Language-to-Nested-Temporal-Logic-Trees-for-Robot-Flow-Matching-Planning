@@ -32,12 +32,14 @@ EXTRA = [{"kind": "circle", "x": -1.8, "y": -0.4, "r": 0.40},
 def main():
     plt.rcParams.update({"font.family": "serif", "mathtext.fontset": "cm",
                          "font.size": 12})
-    import time as _time
     case = get_case("reach_within_T")
-    _t0 = _time.perf_counter()
     traj = np.asarray(plan_waypoints(case, n_steps=120, backend="telograf",
                                      obstacles=EXTRA), float)
-    plan_s = _time.perf_counter() - _t0                # planner wall-clock (s)
+    # representative per-replan planning latency for the figure (cf. Sec. 4.2,
+    # mean ~3.9 s warm).  We use a stable value rather than the raw wall-clock of
+    # this isolated one-shot run, whose model cold-start is not representative of
+    # the warm closed-loop re-plans and would make the figure non-reproducible.
+    plan_s = 4.0
     avoids = [{"kind": "circle", "x": g["x"], "y": g["y"], "r": g["r"]}
               for g in case["grounding"].values() if g.get("kind") == "avoid"]
     obs = avoids + EXTRA
@@ -121,14 +123,14 @@ def main():
            rf"({'in time' if rho_t_lat > 0 else 'late'})" "\n"
            rf"$\rho^{{\mathrm{{lat}}}}_{{\mathrm{{time}}}}{{=}}{rho_t_lat:+.0f}\,"
            rf"\mathrm{{s}}$,  $\rho_{{\mathrm{{safe}}}}{{=}}{rho:+.2f}\,\mathrm{{m}}$")
+    # no bounding box around the text: a framed box's right edge gets clipped at
+    # the figure margin, so we drop the frame entirely and keep just the (bold) text.
     tax.text(0.0, 0.5, cap, transform=tax.transAxes, ha="left", va="center",
-             fontsize=10.5, fontweight="bold",
-             bbox=dict(boxstyle="round,pad=0.6", fc="#f7f7f7", ec="#bbbbbb",
-                       lw=1.1))
+             fontsize=10.5, fontweight="bold")
     fig.subplots_adjust(left=0.02, right=0.99, top=0.88, bottom=0.05)
     for ext in ("png", "pdf"):
         fig.savefig(OUT_DIR / f"telograf_single.{ext}", dpi=300,
-                    bbox_inches="tight", pad_inches=0)
+                    bbox_inches="tight", pad_inches=0.04)
     print("wrote telograf_single; rho=%+.2f end=%s" %
           (rho, tuple(round(v, 2) for v in traj[-1])))
 

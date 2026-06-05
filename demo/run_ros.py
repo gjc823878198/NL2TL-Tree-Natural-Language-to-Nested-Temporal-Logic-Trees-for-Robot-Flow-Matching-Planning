@@ -123,6 +123,24 @@ class DemoGUI:
             self._log("check : " + Feas.summary(fe))
         except Exception as e:
             self._log(f"check : (gauge unavailable: {e})")
+        # best-of-N OOD self-check (paper Fig.~1): report flow-vs-A* verdict and
+        # save the candidate visualization the presenter can show beside RViz.
+        try:
+            import matplotlib; matplotlib.use("Agg")
+            import selfcheck as SC
+            from sim_ros2.scenario import CYLINDERS as _CYL
+            obs2 = [{"kind": "circle", "x": x, "y": y, "r": r}
+                    for (x, y, r) in _CYL]
+            sc = SC.run(info, obstacles=obs2, world_bounds=G.WORLD_BOUNDS,
+                        start=G.START)
+            self._log("self  : " + SC.summary(sc))
+            if sc.get("available"):
+                import run_2d
+                p = run_2d.render_selfcheck(info, sc)
+                if p:
+                    self._log(f"self  : self-check figure -> {p}")
+        except Exception as e:
+            self._log(f"self  : (self-check unavailable: {e})")
         CASE_JSON.write_text(json.dumps(case, indent=1))
         self._log(f"wrote {CASE_JSON}")
         self._stop()                          # clear any previous run
