@@ -143,13 +143,18 @@ class DemoGUI:
             self._log(f"self  : (self-check unavailable: {e})")
         CASE_JSON.write_text(json.dumps(case, indent=1))
         self._log(f"wrote {CASE_JSON}")
-        self._stop()                          # clear any previous run
-        # open RViz so the attendee watches the robot execute the task
+        self._stop()                          # stop only the previous follower
         env = dict(os.environ, QT_QPA_PLATFORM=os.environ.get("QT_QPA_PLATFORM",
                                                               "xcb"))
-        self.procs.append(subprocess.Popen(
-            ["rviz2", "-d", str(RVIZ_CFG)], env=env))
-        self._log("opened RViz")
+        # ONE persistent RViz (the SAME markers.rviz as the closed-loop sim):
+        # it shows /ubicomp/markers -- start, all goal regions, the planned path,
+        # the TRAVELLED history trajectory, the sense ring and the sim clock --
+        # and stays up across tasks (re-opened only if the attendee closed it), so
+        # the demo's RViz matches the closed-loop simulation exactly.
+        if getattr(self, "rviz", None) is None or self.rviz.poll() is not None:
+            self.rviz = subprocess.Popen(["rviz2", "-d", str(RVIZ_CFG)], env=env)
+            self._log("opened RViz (persistent) — shows the live + history "
+                      "trajectory, same as the closed-loop sim")
         # start the follower: plans with TeLoGraF, drives the TurtleBot3
         self.procs.append(subprocess.Popen(
             [sys.executable, str(FOLLOWER), "--case-file", str(CASE_JSON),
@@ -165,6 +170,8 @@ class DemoGUI:
 
     def _quit(self):
         self._stop()
+        if getattr(self, "rviz", None) is not None and self.rviz.poll() is None:
+            self.rviz.terminate()                # close the persistent RViz too
         self.root.destroy()
 
     def run(self):
