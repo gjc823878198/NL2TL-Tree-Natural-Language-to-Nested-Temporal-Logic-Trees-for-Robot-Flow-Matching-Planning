@@ -36,6 +36,17 @@ PROFILE_INI="$OBS_CFG/basic/profiles/$PROFILE/basic.ini"
 RECDIR="$HOME/Videos"
 mode="${1:-start}"
 
+# How OBS must be launched on THIS box:
+#  * __NV_PRIME_RENDER_OFFLOAD + __GLX_VENDOR_LIBRARY_NAME=nvidia : render on the
+#    RTX 5080. Ubuntu 22.04's Mesa has no HW GL driver for the new Arrow Lake iGPU,
+#    so the default falls back to llvmpipe (software) -> can't import the PipeWire
+#    dmabuf -> BLACK capture (and high CPU). NVIDIA GL fixes it, and keeps GL +
+#    NVENC on one GPU.
+#  * QT_QPA_PLATFORM=xcb : the wayland Qt plugin isn't installed; PipeWire still
+#    captures the real Wayland screen regardless of OBS's own window system.
+OBS_ENV=(env __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia
+         __VK_LAYER_NV_optimus=NVIDIA_only QT_QPA_PLATFORM=xcb)
+
 have_obs() { command -v obs >/dev/null || { echo "OBS not installed (apt install obs-studio)"; exit 1; }; }
 mkdir -p "$RECDIR"
 
@@ -114,7 +125,7 @@ case "$mode" in
     echo ">> Opening OBS on profile '$PROFILE'. Do the 4 one-time steps in the header, then close OBS."
     # GUI under XWayland (xcb): the wayland Qt plugin isn't installed here, and
     # PipeWire capture records the real Wayland screen regardless of OBS's window system.
-    QT_QPA_PLATFORM=xcb obs --profile "$PROFILE" >/dev/null 2>&1 &
+    "${OBS_ENV[@]}" obs --profile "$PROFILE" >/dev/null 2>&1 &
     echo ">> (OBS launched, PID $!).  After you add the PipeWire source + share your monitor, you're done."
     ;;
 
@@ -131,7 +142,7 @@ case "$mode" in
     echo "   CPU cost ~0%  --  TeLoGraF/Gazebo planner untouched."
     echo " Stop with:  ./record_demo.sh stop   (or click Stop in the OBS tray)"
     echo "============================================================"
-    QT_QPA_PLATFORM=xcb obs --profile "$PROFILE" --startrecording --minimize-to-tray >/dev/null 2>&1 &
+    "${OBS_ENV[@]}" obs --profile "$PROFILE" --startrecording --minimize-to-tray >/dev/null 2>&1 &
     echo ">> OBS recording (PID $!)."
     ;;
 
