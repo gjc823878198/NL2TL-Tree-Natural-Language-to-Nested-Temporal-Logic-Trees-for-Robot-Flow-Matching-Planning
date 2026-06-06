@@ -47,10 +47,20 @@ class DemoGUI:
         self.root = tk.Tk()
         self.root.title("NL2TL-Tree demo — natural-language task")
         self.root.geometry("760x540")
-        tk.Label(self.root,
-                 text="Type a task for the TurtleBot3 (regions A / B / C):",
+        tk.Label(self.root, text="Type a task for the TurtleBot3:",
                  font=("DejaVu Sans", 13, "bold")).pack(anchor="w", padx=12,
-                                                        pady=(12, 4))
+                                                        pady=(12, 1))
+        # map regions + their coordinates in the robot-start-origin frame
+        try:
+            sx, sy = G.START
+            regions = "    ".join(f"{n} ({x - sx:g}, {y - sy:g})"
+                                  for n, (x, y, _r) in G.LANDMARKS.items())
+        except Exception:
+            regions = "A (6, 0)    B (6, 6)    C (0, 6)"
+        tk.Label(self.root,
+                 text=f"map regions (robot-frame):    {regions};    start (0, 0)",
+                 font=("DejaVu Sans", 10, "bold"), fg="#1e8449").pack(
+                     anchor="w", padx=12, pady=(0, 4))
         self.entry = tk.Text(self.root, height=3, width=80,
                              font=("DejaVu Sans", 12), wrap="word")
         self.entry.pack(padx=12, pady=4)

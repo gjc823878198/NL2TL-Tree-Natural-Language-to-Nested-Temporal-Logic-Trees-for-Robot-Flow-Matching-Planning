@@ -16,6 +16,7 @@ from pathlib import Path
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 from visualization_msgs.msg import Marker, MarkerArray
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,9 +27,17 @@ from sim_ros2.scenario import GOALS, GOAL_NAMES, START          # noqa: E402
 class SceneMarkers(Node):
     def __init__(self):
         super().__init__("scene_markers")
-        self.pub = self.create_publisher(MarkerArray, "/ubicomp/markers", 10)
+        # MUST match the RViz MarkerArray display QoS (markers.rviz) and the
+        # follower: Reliable + TRANSIENT_LOCAL.  A default (Volatile) publisher is
+        # QoS-incompatible with RViz's Transient-Local subscriber -> 0 markers.
+        qos = QoSProfile(depth=1)
+        qos.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
+        self.pub = self.create_publisher(MarkerArray, "/ubicomp/markers", qos)
         self.frame = "map"
         self.create_timer(0.5, self._publish)                   # 2 Hz, persistent
+        self.get_logger().info(
+            f"scene_markers: publishing {len(GOALS)} goal regions + start to "
+            f"/ubicomp/markers (frame '{self.frame}', Transient Local)")
 
     def _publish(self):
         arr = MarkerArray()
