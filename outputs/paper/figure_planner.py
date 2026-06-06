@@ -112,40 +112,40 @@ def main():
                      mutation_scale=14, lw=lw, color=ec, zorder=2))
 
     # encoder -> conditioning
-    box(1, 66, 27, 16, "frozen GNN\nencoder", "#d7e3f2", BOX_E, fs=12,
+    box(1, 64, 27, 20, "frozen GNN\nencoder", "#d7e3f2", BOX_E, fs=13,
         bold=True)
-    ax.text(14.5, 60.5, r"$\Rightarrow$ conditioning $z$", ha="center",
-            fontsize=11, fontweight="bold")
-    arr(28, 74, 39, 74)
+    ax.text(14.5, 58.5, r"$\Rightarrow$ conditioning $z$", ha="center",
+            fontsize=12, fontweight="bold")
+    arr(28, 74, 41.4, 74)
     # flow / denoising row
     xs = [47, 62, 77, 92]; yr = 74
-    ax.text(69.5, 92, "flow matching (frozen)", ha="center", fontsize=12.5,
+    ax.text(69.5, 93, "flow matching (frozen)", ha="center", fontsize=13.5,
             fontweight="bold", color="#16213a")
     for i, (xx, lb) in enumerate(zip(xs, [r"$x_T$", r"$x_t$", r"$\cdots$", r"$x_0$"])):
         ax.add_patch(Circle((xx, yr), 5.6, facecolor="#cfe0d2",
                             edgecolor=GATE_E, lw=1.4, zorder=3))
-        ax.text(xx, yr, lb, ha="center", va="center", fontsize=11.5,
+        ax.text(xx, yr, lb, ha="center", va="center", fontsize=12.5,
                 fontweight="bold", zorder=4)
         if i < len(xs)-1:
             arr(xx+5.6, yr, xs[i+1]-5.6, yr, ec=GATE_E, lw=1.4)
     # robustness-gradient guidance: box below, arrows up into the row
-    box(38, 47, 58, 9, r"differentiable STL robustness $\nabla\rho$ (STLCG)"
-        "\nsteers sampling", "#fbe2df", "#b03a2e", fs=11, bold=True)
+    box(38, 44, 58, 12, r"differentiable STL robustness $\nabla\rho$ (STLCG)"
+        "\nsteers sampling", "#fbe2df", "#b03a2e", fs=12.5, bold=True)
     for xx in xs[:-1]:
-        arr(xx, 56, xx, yr-5.8, ec="#b03a2e", lw=1.3, style="-|>")
+        arr(xx, 56, xx, yr-5.6, ec="#b03a2e", lw=1.4, style="-|>")
     # three mechanism tags, evenly spaced, NO overlap (gaps of 3 units)
     tags = ["operator normalization\n$\\rightarrow,\\leftrightarrow\\Rightarrow$ basis",
             "nested-tree\ndecomposition",
             "feasibility self-check\n$\\to$ A* if OOD"]
     txs = [1, 35, 69]                       # 1-31, 35-65, 69-99  (gap 3)
     for x, t in zip(txs, tags):
-        box(x, 24, 30, 13, t, MECH, MECH_E, fs=10.5, bold=True)
+        box(x, 22, 30, 15, t, MECH, MECH_E, fs=11.5, bold=True)
     # render this formula with the STIX math fontset, whose \mathbf DOES bold
     # Greek (cm's does not) -- per-text, so the rest of the figure stays cm.
-    ax.text(50, 14, r"$\mathbf{\rho(G\varphi)=\min_t\rho(\varphi,t),\;\;"
+    ax.text(50, 10, r"$\mathbf{\rho(G\varphi)=\min_t\rho(\varphi,t),\;\;"
             r"\rho(F\varphi)=\max_t\rho(\varphi,t),\;\;\rho>0 \Rightarrow}$ "
             r"$\mathbf{satisfied}$",
-            ha="center", fontsize=15, fontweight="bold", color="#111",
+            ha="center", fontsize=17, fontweight="bold", color="#111",
             math_fontfamily="stix")
     ax.set_title("(b) Frozen flow-matching planner $+$ robustness guidance",
                  fontsize=15, fontweight="bold")
