@@ -129,17 +129,18 @@ def main():
         if i < len(xs)-1:
             arr(xx+5.6, yr, xs[i+1]-5.6, yr, ec=GATE_E, lw=1.4)
     # robustness-gradient guidance: box below, arrows up into the row
-    box(38, 44, 58, 12, r"differentiable STL robustness $\nabla\rho$ (STLCG)"
+    box(33, 44, 65, 12, r"differentiable STL robustness $\nabla\rho$ (STLCG)"
         "\nsteers sampling", "#fbe2df", "#b03a2e", fs=12.5, bold=True)
     for xx in xs[:-1]:
         arr(xx, 56, xx, yr-5.6, ec="#b03a2e", lw=1.4, style="-|>")
-    # three mechanism tags, evenly spaced, NO overlap (gaps of 3 units)
+    # three mechanism tags; the long-text boxes (1 and 3) get extra width so the
+    # text does not touch the rounded border, with small even gaps.
     tags = ["operator normalization\n$\\rightarrow,\\leftrightarrow\\Rightarrow$ basis",
             "nested-tree\ndecomposition",
             "feasibility self-check\n$\\to$ A* if OOD"]
-    txs = [1, 35, 69]                       # 1-31, 35-65, 69-99  (gap 3)
-    for x, t in zip(txs, tags):
-        box(x, 22, 30, 15, t, MECH, MECH_E, fs=11.5, bold=True)
+    tag_xw = [(0, 35), (37, 26), (65, 35)]   # (x, width): 0-35, 37-63, 65-100
+    for (x, w), t in zip(tag_xw, tags):
+        box(x, 22, w, 15, t, MECH, MECH_E, fs=11.5, bold=True)
     # render this formula with the STIX math fontset, whose \mathbf DOES bold
     # Greek (cm's does not) -- per-text, so the rest of the figure stays cm.
     ax.text(50, 10, r"$\mathbf{\rho(G\varphi)=\min_t\rho(\varphi,t),\;\;"
