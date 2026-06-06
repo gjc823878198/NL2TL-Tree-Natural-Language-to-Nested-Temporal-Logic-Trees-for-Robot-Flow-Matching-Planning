@@ -112,7 +112,9 @@ case "$mode" in
   setup)
     have_obs; ensure_profile; assert_nvenc
     echo ">> Opening OBS on profile '$PROFILE'. Do the 4 one-time steps in the header, then close OBS."
-    obs --profile "$PROFILE" >/dev/null 2>&1 &
+    # GUI under XWayland (xcb): the wayland Qt plugin isn't installed here, and
+    # PipeWire capture records the real Wayland screen regardless of OBS's window system.
+    QT_QPA_PLATFORM=xcb obs --profile "$PROFILE" >/dev/null 2>&1 &
     echo ">> (OBS launched, PID $!).  After you add the PipeWire source + share your monitor, you're done."
     ;;
 
@@ -129,7 +131,7 @@ case "$mode" in
     echo "   CPU cost ~0%  --  TeLoGraF/Gazebo planner untouched."
     echo " Stop with:  ./record_demo.sh stop   (or click Stop in the OBS tray)"
     echo "============================================================"
-    obs --profile "$PROFILE" --startrecording --minimize-to-tray >/dev/null 2>&1 &
+    QT_QPA_PLATFORM=xcb obs --profile "$PROFILE" --startrecording --minimize-to-tray >/dev/null 2>&1 &
     echo ">> OBS recording (PID $!)."
     ;;
 
