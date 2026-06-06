@@ -52,8 +52,6 @@ def main():
     node(*P["and"], 2.7, 1.4, r"$\wedge$ and", ANDc, AND_E, fs=10)
     node(*P["mv"], 3.8, 1.4, "move_to_place2", ATOM, ATOM_E, fs=8.5)
     node(*P["fin"], 3.4, 1.4, "finish_task3", ATOM, ATOM_E, fs=8.5)
-    ax.text(5, 9.9, "Parsed nested STL tree", ha="center", fontsize=10.5,
-            fontweight="bold", color="#2c3e6b")
 
     # ---------------- right: NL + pseudo-code AST + round-trip STL ----------
     ax = fig.add_subplot(gs[0, 1]); ax.axis("off")
