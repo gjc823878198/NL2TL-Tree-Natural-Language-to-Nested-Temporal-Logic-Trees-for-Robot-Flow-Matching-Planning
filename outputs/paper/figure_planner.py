@@ -138,7 +138,9 @@ def main():
     tags = ["operator normalization\n$\\rightarrow,\\leftrightarrow\\Rightarrow$ basis",
             "nested-tree\ndecomposition",
             "feasibility self-check\n$\\to$ A* if OOD"]
-    tag_xw = [(0, 35), (37, 26), (65, 35)]   # (x, width): 0-35, 37-63, 65-100
+    # left edge of tag 1 = blue encoder box left (x=1); right edge of tag 3 = red
+    # box right (x=98); even gaps -- and pulled off the panel edge (was clipping).
+    tag_xw = [(1, 34), (37.5, 24), (64, 34)]   # 1-35, 37.5-61.5, 64-98
     for (x, w), t in zip(tag_xw, tags):
         box(x, 22, w, 15, t, MECH, MECH_E, fs=11.5, bold=True)
     # render this formula with the STIX math fontset, whose \mathbf DOES bold
