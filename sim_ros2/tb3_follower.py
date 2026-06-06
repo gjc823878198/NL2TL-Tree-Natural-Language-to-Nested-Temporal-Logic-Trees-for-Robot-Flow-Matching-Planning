@@ -443,6 +443,9 @@ class TB3Follower(Node):
                 f"TeLoGraF trajectory -- the model cold-start can take ~10-30 s on "
                 f"the first call, please wait (this is not a hang)...")
         self._ingest_scan()
+        # publish the goal regions + labels + start BEFORE the cold-start plan, so
+        # the A/B/C green discs are visible in RViz immediately (not after ~10-30 s).
+        self._publish([])
         # build the goal queue: visit ALL reach atoms in spec order (multi-goal),
         # or the single nearest goal (disjunctive cases like cond_reach_either).
         if self.visit_all:
@@ -593,8 +596,12 @@ class TB3Follower(Node):
         s.pose.position.x, s.pose.position.y = float(self.sx), float(self.sy)
         arr.markers.append(s)
         for (gx, gy, gr) in self.reaches:
-            g = base(Marker.SPHERE, "goals", 0.1, 0.3, 0.9, 0.8, 2 * gr)
+            # flat GREEN disc marking the goal region (matches the Gazebo disc and
+            # the 2D view); semi-transparent so the path/robot show through.
+            g = base(Marker.CYLINDER, "goals", 0.2, 0.85, 0.4, 0.55, 2 * gr)
+            g.scale.z = 0.02
             g.pose.position.x, g.pose.position.y = float(gx), float(gy)
+            g.pose.position.z = 0.02
             arr.markers.append(g)
         if len(plan) >= 2:
             ln = base(Marker.LINE_STRIP, "planned", 0.1, 0.9, 0.1, 0.9, 0.04)
@@ -637,12 +644,14 @@ class TB3Follower(Node):
                 body += "\nSTL: " + self.task_stl
             txt.text = body
             arr.markers.append(txt)
-        # --- goal letter labels above each region (shows the visit order) ---
+        # --- goal labels above each region: letter + coordinate in the
+        #     robot-start-origin frame (origin = where the robot spawned) ---
         for (gx, gy, gr), name in zip(self.reaches, self.goal_names):
-            lab = base(Marker.TEXT_VIEW_FACING, "goal_labels", 1.0, 1.0, 1.0, 1.0, 0.5)
+            lab = base(Marker.TEXT_VIEW_FACING, "goal_labels", 1.0, 1.0, 1.0, 1.0, 0.45)
             lab.pose.position.x, lab.pose.position.y = float(gx), float(gy)
             lab.pose.position.z = float(gr) + 0.6
-            lab.text = name
+            rx, ry = gx - self.sx, gy - self.sy   # relative to the spawn pose
+            lab.text = f"{name} ({rx:g}, {ry:g})"
             arr.markers.append(lab)
         # --- live simulation-time clock, floating at the robot (seconds == the
         #     task's time unit, e.g. the "...within 120 s" deadline) ---

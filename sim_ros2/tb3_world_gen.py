@@ -29,6 +29,21 @@ _CYL = """\
       </link>
     </model>
 """
+# goal regions: a FLAT, VISUAL-ONLY green disc on the ground (no <collision>, so
+# the LiDAR -- which senses collision geometry -- ignores it and the robot can
+# still drive in; it just MARKS the target area in green, as in the 2D view).
+_DISC = """\
+    <model name="{name}">
+      <static>true</static>
+      <pose>{x} {y} 0.015 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><cylinder><radius>{r}</radius><length>0.02</length></cylinder></geometry>
+          <material><ambient>{rgba}</ambient><diffuse>{rgba}</diffuse></material>
+        </visual>
+      </link>
+    </model>
+"""
 _COLOR = {"reach": "0.2 0.85 0.4 1", "avoid": "0.9 0.2 0.2 1",
           "obstacle": "0.55 0.55 0.55 1"}
 
@@ -44,13 +59,15 @@ def cylinder_disks(case_id: str, extra_obstacles=()):
 
 
 def cylinder_world(case_id: str, extra_obstacles=(), h: float = 0.6) -> str:
-    # Only OBSTACLES become physical cylinders.  Goal (reach) regions are NOT
-    # spawned -- they are abstract target areas shown as RViz markers; spawning
-    # them physically would make the robot's LiDAR treat the goal as an obstacle
-    # and avoid it (it could never arrive).
+    # OBSTACLES become physical (collidable) cylinders.  Goal (reach) regions are
+    # drawn as FLAT, VISUAL-ONLY green discs (no collision) so they MARK the target
+    # area in Gazebo without the LiDAR treating them as obstacles -- the robot can
+    # still drive in and arrive.
     models = ""
     for i, d in enumerate(cylinder_disks(case_id, extra_obstacles)):
         if d.kind == "reach":
+            models += _DISC.format(name=f"goal_{i}", x=d.x, y=d.y, r=d.r,
+                                   rgba=_COLOR["reach"])
             continue
         models += _CYL.format(name=f"{d.kind}_{i}", x=d.x, y=d.y, z=h / 2,
                               r=d.r, h=h,

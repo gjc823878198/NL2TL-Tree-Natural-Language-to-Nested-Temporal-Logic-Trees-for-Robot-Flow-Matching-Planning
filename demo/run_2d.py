@@ -204,12 +204,15 @@ def _draw_world(ax, goals, goal_names, replan_pts, title):
                                facecolor="#2ecc71" if on else "#cfd8dc",
                                edgecolor="#1e8449" if on else "#90a4ae",
                                alpha=0.5 if on else 0.35, lw=1.2))
-        lab = f"{name}" + (f" ({visit[name]})" if on else "")
-        ax.text(gx, gy + gr + 0.2, lab, ha="center", fontsize=15,
+        # label = letter + coordinate in the robot-start-origin frame (the robot
+        # spawns at START, so that point is the (0, 0) of these coordinates).
+        rx, ry = gx - G.START[0], gy - G.START[1]
+        lab = f"{name} ({rx:g}, {ry:g})"
+        ax.text(gx, gy + gr + 0.2, lab, ha="center", fontsize=13,
                 fontweight="bold",
                 color="#1e8449" if on else "#90a4ae")
     ax.plot(*G.START, marker="s", ms=12, color="k", zorder=6)
-    ax.text(G.START[0], G.START[1] - 0.45, "start", ha="center", fontsize=12,
+    ax.text(G.START[0], G.START[1] - 0.45, "start (0, 0)", ha="center", fontsize=12,
             fontweight="bold")
     for rp in replan_pts:
         ax.plot(*rp, marker="X", ms=10, color="#8e44ad", zorder=7)
