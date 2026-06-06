@@ -124,24 +124,6 @@ class DemoGUI:
             self._log("check : " + Feas.summary(fe))
         except Exception as e:
             self._log(f"check : (gauge unavailable: {e})")
-        # best-of-N OOD self-check (paper Fig.~1): report flow-vs-A* verdict and
-        # save the candidate visualization the presenter can show beside RViz.
-        try:
-            import matplotlib; matplotlib.use("Agg")
-            import selfcheck as SC
-            from sim_ros2.scenario import CYLINDERS as _CYL
-            obs2 = [{"kind": "circle", "x": x, "y": y, "r": r}
-                    for (x, y, r) in _CYL]
-            sc = SC.run(info, obstacles=obs2, world_bounds=G.WORLD_BOUNDS,
-                        start=G.START)
-            self._log("self  : " + SC.summary(sc))
-            if sc.get("available"):
-                import run_2d
-                p = run_2d.render_selfcheck(info, sc)
-                if p:
-                    self._log(f"self  : self-check figure -> {p}")
-        except Exception as e:
-            self._log(f"self  : (self-check unavailable: {e})")
         CASE_JSON.write_text(json.dumps(case, indent=1))
         self._log(f"wrote {CASE_JSON}")
         self._stop()                          # stop only the previous follower
@@ -160,9 +142,37 @@ class DemoGUI:
         # start the follower: plans with TeLoGraF, drives the TurtleBot3
         self.procs.append(subprocess.Popen(
             [sys.executable, str(FOLLOWER), "--case-file", str(CASE_JSON),
-             "--multi-goal"], cwd=str(CODE), env=env))
+             "--multi-goal", "--scene-external"], cwd=str(CODE), env=env))
         self._log("started TurtleBot3 follower -> the robot will plan and move "
                   "(first TeLoGraF call can take ~10-30 s).")
+        # the best-of-N OOD self-check batch-samples the flow prior (~15-30 s); run
+        # it in the BACKGROUND so it NEVER blocks the GUI or delays the robot.
+        import threading
+        threading.Thread(target=self._run_selfcheck, args=(info,),
+                         daemon=True).start()
+
+    def _run_selfcheck(self, info):
+        """Best-of-N OOD self-check, off the GUI thread (logs its verdict + saves
+        the figure when done; failures are non-fatal)."""
+        try:
+            import matplotlib; matplotlib.use("Agg")
+            import selfcheck as SC
+            from sim_ros2.scenario import CYLINDERS as _CYL
+            obs = [{"kind": "circle", "x": x, "y": y, "r": r} for (x, y, r) in _CYL]
+            sc = SC.run(info, obstacles=obs, world_bounds=G.WORLD_BOUNDS,
+                        start=G.START)
+            msg = "self  : " + SC.summary(sc)
+            if sc.get("available"):
+                import run_2d
+                p = run_2d.render_selfcheck(info, sc)
+                if p:
+                    msg += f"\nself  : self-check figure -> {p}"
+        except Exception as e:
+            msg = f"self  : (self-check unavailable: {e})"
+        try:                                  # log back on the GUI (main) thread
+            self.root.after(0, lambda: self._log(msg))
+        except Exception:
+            print(msg)
 
     def _stop(self):
         for p in self.procs:

@@ -30,8 +30,20 @@ def ask_nl(title: str = "NL2TL-Tree demo — enter a task"):
     root.title(title)
     root.geometry("680x360")
 
-    tk.Label(root, text="Natural-language task (regions A / B / C on the map):",
-             font=("DejaVu Sans", 12, "bold")).pack(anchor="w", padx=12, pady=(12, 4))
+    # map regions + their coordinates in the robot-start-origin frame (the robot
+    # spawns at START, so that point is (0, 0)).
+    try:
+        import nl_grounding as _G
+        _sx, _sy = _G.START
+        _regions = "   ".join(f"{n} ({x - _sx:g}, {y - _sy:g})"
+                              for n, (x, y, _r) in _G.LANDMARKS.items())
+    except Exception:
+        _regions = "A (6, 0)   B (6, 6)   C (0, 6)"
+    tk.Label(root, text="Natural-language task:",
+             font=("DejaVu Sans", 12, "bold")).pack(anchor="w", padx=12, pady=(12, 1))
+    tk.Label(root, text=f"map regions (robot-frame):   {_regions};   start (0, 0)",
+             font=("DejaVu Sans", 10, "bold"), fg="#1e8449"
+             ).pack(anchor="w", padx=12, pady=(0, 4))
     entry = tk.Text(root, height=3, width=72, font=("DejaVu Sans", 12), wrap="word")
     entry.pack(padx=12, pady=4)
     entry.insert("1.0", EXAMPLES[1])

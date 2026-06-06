@@ -106,6 +106,12 @@ def _setup(context, *args, **kwargs):
     actions.append(Node(
         package="rviz2", executable="rviz2", name="rviz2_markers", output="screen",
         arguments=["-d", str(CODE / "sim_ros2" / "gui" / "markers.rviz")]))
+    # publish the A/B/C goal regions + labels + start to /ubicomp/markers from
+    # launch, so RViz shows the target regions the moment it opens (before a task
+    # is submitted / the follower runs).
+    actions.append(ExecuteProcess(
+        cmd=[sys.executable, str(CODE / "sim_ros2" / "scene_markers.py")],
+        output="screen"))
     # the natural-language GUI (--no-rviz: RViz is already open above; the GUI
     # starts only the TeLoGraF follower when a task is submitted)
     gui_cmd = [sys.executable, str(DEMO / "run_ros.py"), "--no-rviz"]

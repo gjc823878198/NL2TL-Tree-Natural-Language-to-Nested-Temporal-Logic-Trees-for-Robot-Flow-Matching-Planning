@@ -81,6 +81,9 @@ class TB3Follower(Node):
         self.reaches = _reach_targets(self.case)
         self.sense_range = args.sense_range
         self.frame = "map"
+        # when a scene_markers node publishes the start/goals/labels (the demo),
+        # skip them here so the two do not draw duplicate markers.
+        self.scene_external = bool(getattr(args, "scene_external", False))
         self.scan = None
         self.pose = (self.sx, self.sy, 0.0)                 # WORLD pose (base)
         self._scan_pose = (self.sx, self.sy, 0.0)           # odom pose @ scan time
@@ -592,17 +595,18 @@ class TB3Follower(Node):
             m.color.r, m.color.g, m.color.b, m.color.a = r, g, b, a
             m.pose.orientation.w = 1.0
             return m
-        s = base(Marker.SPHERE, "start", 0.1, 0.8, 0.1, 1.0, 0.35)
-        s.pose.position.x, s.pose.position.y = float(self.sx), float(self.sy)
-        arr.markers.append(s)
-        for (gx, gy, gr) in self.reaches:
-            # flat GREEN disc marking the goal region (matches the Gazebo disc and
-            # the 2D view); semi-transparent so the path/robot show through.
-            g = base(Marker.CYLINDER, "goals", 0.2, 0.85, 0.4, 0.55, 2 * gr)
-            g.scale.z = 0.02
-            g.pose.position.x, g.pose.position.y = float(gx), float(gy)
-            g.pose.position.z = 0.02
-            arr.markers.append(g)
+        if not self.scene_external:           # scene_markers node owns these
+            s = base(Marker.SPHERE, "start", 0.1, 0.8, 0.1, 1.0, 0.35)
+            s.pose.position.x, s.pose.position.y = float(self.sx), float(self.sy)
+            arr.markers.append(s)
+            for (gx, gy, gr) in self.reaches:
+                # flat GREEN disc marking the goal region (matches the Gazebo disc
+                # and the 2D view); semi-transparent so path/robot show through.
+                g = base(Marker.CYLINDER, "goals", 0.2, 0.85, 0.4, 0.55, 2 * gr)
+                g.scale.z = 0.02
+                g.pose.position.x, g.pose.position.y = float(gx), float(gy)
+                g.pose.position.z = 0.02
+                arr.markers.append(g)
         if len(plan) >= 2:
             ln = base(Marker.LINE_STRIP, "planned", 0.1, 0.9, 0.1, 0.9, 0.04)
             ln.points = [Point(x=float(x), y=float(y), z=0.05) for x, y in plan]
@@ -646,13 +650,14 @@ class TB3Follower(Node):
             arr.markers.append(txt)
         # --- goal labels above each region: letter + coordinate in the
         #     robot-start-origin frame (origin = where the robot spawned) ---
-        for (gx, gy, gr), name in zip(self.reaches, self.goal_names):
-            lab = base(Marker.TEXT_VIEW_FACING, "goal_labels", 1.0, 1.0, 1.0, 1.0, 0.45)
-            lab.pose.position.x, lab.pose.position.y = float(gx), float(gy)
-            lab.pose.position.z = float(gr) + 0.6
-            rx, ry = gx - self.sx, gy - self.sy   # relative to the spawn pose
-            lab.text = f"{name} ({rx:g}, {ry:g})"
-            arr.markers.append(lab)
+        if not self.scene_external:           # scene_markers node owns these
+            for (gx, gy, gr), name in zip(self.reaches, self.goal_names):
+                lab = base(Marker.TEXT_VIEW_FACING, "goal_labels", 1.0, 1.0, 1.0, 1.0, 0.45)
+                lab.pose.position.x, lab.pose.position.y = float(gx), float(gy)
+                lab.pose.position.z = float(gr) + 0.6
+                rx, ry = gx - self.sx, gy - self.sy   # relative to the spawn pose
+                lab.text = f"{name} ({rx:g}, {ry:g})"
+                arr.markers.append(lab)
         # --- live simulation-time clock, floating at the robot (seconds == the
         #     task's time unit, e.g. the "...within 120 s" deadline) ---
         clk = base(Marker.TEXT_VIEW_FACING, "sim_time", 1.0, 0.95, 0.2, 1.0, 0.42)
@@ -689,6 +694,9 @@ def main():
     ap.add_argument("--multi-goal", action="store_true",
                     help="visit ALL reach atoms in spec order (sequential "
                          "multi-goal); auto-on for case closed_loop_multi")
+    ap.add_argument("--scene-external", action="store_true",
+                    help="a separate node (scene_markers.py) publishes the start "
+                         "+ goal regions + labels, so skip them here (no duplicate)")
     args = ap.parse_args()
     rclpy.init()
     node = TB3Follower(args)
