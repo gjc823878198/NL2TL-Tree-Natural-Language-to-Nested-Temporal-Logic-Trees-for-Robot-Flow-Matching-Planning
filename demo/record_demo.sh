@@ -36,16 +36,23 @@ PROFILE_INI="$OBS_CFG/basic/profiles/$PROFILE/basic.ini"
 RECDIR="$HOME/Videos"
 mode="${1:-start}"
 
-# How OBS must be launched on THIS box:
-#  * __NV_PRIME_RENDER_OFFLOAD + __GLX_VENDOR_LIBRARY_NAME=nvidia : render on the
-#    RTX 5080. Ubuntu 22.04's Mesa has no HW GL driver for the new Arrow Lake iGPU,
-#    so the default falls back to llvmpipe (software) -> can't import the PipeWire
-#    dmabuf -> BLACK capture (and high CPU). NVIDIA GL fixes it, and keeps GL +
-#    NVENC on one GPU.
-#  * QT_QPA_PLATFORM=xcb : the wayland Qt plugin isn't installed; PipeWire still
-#    captures the real Wayland screen regardless of OBS's own window system.
-OBS_ENV=(env __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia
-         __VK_LAYER_NV_optimus=NVIDIA_only QT_QPA_PLATFORM=xcb)
+# OBS must run as a NATIVE WAYLAND app -- only then does it register the
+# "Screen Capture (PipeWire)" source (under xcb it offers only XSHM = X11 grab =
+# black on Wayland). Native Wayland also gives OBS the compositor's working EGL
+# context, so the PipeWire dmabuf imports fine; NVENC still encodes on the RTX 5080.
+# Needs the qtwayland plugin:  sudo apt install qtwayland5
+OBS_ENV=(env QT_QPA_PLATFORM=wayland)
+QT_WL_PLUGIN="/usr/lib/x86_64-linux-gnu/qt5/plugins/platforms/libqwayland-generic.so"
+
+need_qtwayland() {
+  if [ ! -e "$QT_WL_PLUGIN" ] && ! dpkg -s qtwayland5 >/dev/null 2>&1; then
+    echo "!! Missing the Wayland Qt plugin, so OBS can't show the PipeWire source."
+    echo "   Install it once (small package):"
+    echo "       sudo apt install qtwayland5"
+    echo "   then re-run this script."
+    exit 1
+  fi
+}
 
 have_obs() { command -v obs >/dev/null || { echo "OBS not installed (apt install obs-studio)"; exit 1; }; }
 mkdir -p "$RECDIR"
@@ -121,16 +128,14 @@ pipewire_source_ready() {
 
 case "$mode" in
   setup)
-    have_obs; ensure_profile; assert_nvenc
+    have_obs; need_qtwayland; ensure_profile; assert_nvenc
     echo ">> Opening OBS on profile '$PROFILE'. Do the 4 one-time steps in the header, then close OBS."
-    # GUI under XWayland (xcb): the wayland Qt plugin isn't installed here, and
-    # PipeWire capture records the real Wayland screen regardless of OBS's window system.
     "${OBS_ENV[@]}" obs --profile "$PROFILE" >/dev/null 2>&1 &
     echo ">> (OBS launched, PID $!).  After you add the PipeWire source + share your monitor, you're done."
     ;;
 
   start|"")
-    have_obs; ensure_profile; assert_nvenc
+    have_obs; need_qtwayland; ensure_profile; assert_nvenc
     if pgrep -x obs >/dev/null; then
       echo "!! OBS is already running -- stop it first ('./record_demo.sh stop') to avoid double sessions."; exit 1
     fi
