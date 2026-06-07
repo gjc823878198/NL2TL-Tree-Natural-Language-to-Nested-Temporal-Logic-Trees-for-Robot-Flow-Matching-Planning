@@ -33,3 +33,6 @@ __pycache__/
 .idea/
 .DS_Store
 *.swp
+
+# ---- generated artifacts / paper-figure sources (kept LOCAL, not on GitHub) ----
+outputs/
