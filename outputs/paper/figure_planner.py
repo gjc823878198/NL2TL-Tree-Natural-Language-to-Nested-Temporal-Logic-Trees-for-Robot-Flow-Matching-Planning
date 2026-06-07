@@ -30,7 +30,7 @@ from planner import plan_waypoints                                   # noqa: E40
 from keep_safe import keep_safe_robustness                           # noqa: E402
 
 REACH = "#3a6ea5"; AVOID = "#5b6675"; MECH = "#fff4d6"; MECH_E = "#b8860b"
-GATE_E = "#1e7a46"; BOX = "#dfe9f5"; BOX_E = "#2c3e6b"
+GATE_E = "#4f9e74"; BOX = "#dfe9f5"; BOX_E = "#2c3e6b"
 
 # ---- panel (c): real weave/slalom plan through an obstacle cluster ----
 WIN = (20, 55)
@@ -76,10 +76,10 @@ def main():
              "F":   (2.4, 6.4, r"$F_{[a,b]}$", "#d7e3f2"),
              "g":   (2.4, 3.6, "reach\n$g$", REACH),
              "G1":  (5, 6.4, r"$G$", "#d7e3f2"),
-             "n1":  (5, 4.2, r"$\neg$", "#eee"),
+             "n1":  (5, 4.2, r"$\neg$", "#e3e6ea"),
              "o":   (5, 2.0, "avoid\n$o$", AVOID),
              "Gks": (7.8, 6.4, r"$G$", "#d7e3f2"),
-             "nks": (7.8, 4.2, r"$\neg$", "#eee"),
+             "nks": (7.8, 4.2, r"$\neg$", "#e3e6ea"),
              "u":   (7.8, 2.0, "unsafe\n(sensed)", AVOID)}
     edges = [("and", "F"), ("F", "g"), ("and", "G1"), ("G1", "n1"),
              ("n1", "o"), ("and", "Gks"), ("Gks", "nks"), ("nks", "u")]
@@ -87,7 +87,7 @@ def main():
         ax.plot([nodes[a][0], nodes[b][0]], [nodes[a][1], nodes[b][1]],
                 "-", color="#888", lw=1.3, zorder=1)
     for k, (x, y, lb, c) in nodes.items():
-        ax.add_patch(Circle((x, y), 0.66, facecolor=c, edgecolor="#333",
+        ax.add_patch(Circle((x, y), 0.70, facecolor=c, edgecolor="#333",
                             lw=1.2, zorder=2))
         tc = "white" if c in (REACH, AVOID) else "#16213a"
         ax.text(x, y, lb, ha="center", va="center", fontsize=11,
@@ -130,9 +130,9 @@ def main():
             arr(xx+5.6, yr, xs[i+1]-5.6, yr, ec=GATE_E, lw=1.4)
     # robustness-gradient guidance: box below, arrows up into the row
     box(33, 44, 65, 12, r"differentiable STL robustness $\nabla\rho$ (STLCG)"
-        "\nsteers sampling", "#fbe2df", "#b03a2e", fs=12.5, bold=True)
+        "\nsteers sampling", "#fbe2df", "#c97a6a", fs=12.5, bold=True)
     for xx in xs[:-1]:
-        arr(xx, 56, xx, yr-5.6, ec="#b03a2e", lw=1.4, style="-|>")
+        arr(xx, 56, xx, yr-5.6, ec="#c97a6a", lw=1.4, style="-|>")
     # three mechanism tags; the long-text boxes (1 and 3) get extra width so the
     # text does not touch the rounded border, with small even gaps.
     tags = ["operator normalization\n$\\rightarrow,\\leftrightarrow\\Rightarrow$ basis",
@@ -142,7 +142,7 @@ def main():
     # box right (x=98); even gaps -- and pulled off the panel edge (was clipping).
     tag_xw = [(1, 34), (37.5, 24), (64, 34)]   # 1-35, 37.5-61.5, 64-98
     for (x, w), t in zip(tag_xw, tags):
-        box(x, 22, w, 15, t, MECH, MECH_E, fs=11.5, bold=True)
+        box(x, 22, w, 15, t, MECH, MECH_E, fs=12, bold=True)
     # render this formula with the STIX math fontset, whose \mathbf DOES bold
     # Greek (cm's does not) -- per-text, so the rest of the figure stays cm.
     ax.text(50, 10, r"$\mathbf{\rho(G\varphi)=\min_t\rho(\varphi,t),\;\;"

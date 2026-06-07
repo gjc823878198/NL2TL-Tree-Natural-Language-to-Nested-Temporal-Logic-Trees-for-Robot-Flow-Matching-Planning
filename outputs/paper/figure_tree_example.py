@@ -17,7 +17,7 @@ from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 OUT = Path(__file__).resolve().parent
 IMPLY = "#d9c8f0"; IMPLY_E = "#7a5bbf"      # purple
 ANDc = "#d6d6d6"; AND_E = "#7a7a7a"         # grey
-ATOM = "#fce8a8"; ATOM_E = "#caa83a"        # yellow
+ATOM = "#fce8a8"; ATOM_E = "#d9b85e"        # yellow
 INK = "#16213a"
 
 
@@ -69,13 +69,13 @@ def main():
             "    atom case1,\n"
             "    and(atom move_to_place2,\n"
             "        atom finish_task3))",
-            fontsize=9.3, family="monospace", va="top", color="#1b3a2b")
+            fontsize=9.3, family="monospace", va="top", color="#16213a")
 
     ax.text(0.1, 1.85, "Round-trip STL", fontsize=10.5, fontweight="bold",
             color="#2c3e6b")
     ax.text(0.1, 1.0, r"(case1) $\rightarrow$ (move_to_place2 $\wedge$ "
             "finish_task3)", fontsize=9.3, family="monospace", va="center",
-            color="#111")
+            color="#16213a")
 
     fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.02)
     for ext in ("png", "pdf"):
