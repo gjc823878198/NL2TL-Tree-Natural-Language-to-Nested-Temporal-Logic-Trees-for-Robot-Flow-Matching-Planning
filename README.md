@@ -4,7 +4,11 @@
 
 Companion code for the UbiComp/ISWC 2026 Posters & Demos extended abstract
 *“NL2TL-Tree: Natural Language to Nested Temporal-Logic Trees for
-Robustness-Guided Flow-Matching Planning.”*
+Robustness-Guided Flow-Matching Planning”* — accepted, to appear in the
+*Companion of the 2026 ACM International Joint Conference on Pervasive and
+Ubiquitous Computing (UbiComp Companion '26)*.
+DOI: [10.1145/3798063.3837197](https://doi.org/10.1145/3798063.3837197)
+(activates shortly after publication in the ACM Digital Library).
 
 NL2TL-Tree is a **training-free** pipeline: no model is trained or fine-tuned — a
 frozen LLM is few-shot-prompted and the motion planner is frozen. A phone-typed
@@ -249,14 +253,29 @@ python3 scripts/stage2_robustness.py --k 8       # Stage-2 success/robustness + 
 
 ```bibtex
 @inproceedings{nl2tltree2026,
+  author    = {Gong, Jiachen and Mao, Wencan and Javanmardi, Ehsan and
+               Li, Yun and Zhou, Quanxi and Tsukada, Manabu},
   title     = {NL2TL-Tree: Natural Language to Nested Temporal-Logic Trees
                for Robustness-Guided Flow-Matching Planning},
   booktitle = {Companion of the 2026 ACM International Joint Conference on
-               Pervasive and Ubiquitous Computing and the 2026 ACM International
-               Symposium on Wearable Computers (UbiComp/ISWC '26)},
-  year      = {2026}
+               Pervasive and Ubiquitous Computing (UbiComp Companion '26)},
+  year      = {2026},
+  month     = oct,
+  address   = {Shanghai, China},
+  publisher = {ACM},
+  doi       = {10.1145/3798063.3837197},
+  isbn      = {979-8-4007-2533-3}
 }
 ```
+
+ACM Reference Format:
+
+> Jiachen Gong, Wencan Mao, Ehsan Javanmardi, Yun Li, Quanxi Zhou, and Manabu
+> Tsukada. 2026. NL2TL-Tree: Natural Language to Nested Temporal-Logic Trees
+> for Robustness-Guided Flow-Matching Planning. In *Companion of the 2026 ACM
+> International Joint Conference on Pervasive and Ubiquitous Computing
+> (UbiComp Companion '26), October 11–15, 2026, Shanghai, China.* ACM, New
+> York, NY, USA, 5 pages. https://doi.org/10.1145/3798063.3837197
 
 ## Acknowledgements
 

@@ -706,3 +706,28 @@ latency-aware ρ_time^lat)。
 3. **错例回流**:viz_app 标记的错样本补到 few-shot,主动学习
 4. **微调开源 7B-8B(Llama / Qwen)**:走 NL2TL 论文那条 >95% 的路线
 5. **接 TeLoGraF**:把 `sim2d/run_demo.py::_telograf_plan` stub 填上,让扩散轨迹替代直线
+
+## 引用
+
+论文已被 UbiComp/ISWC 2026 Posters & Demos 录用，将发表于 *Companion of the
+2026 ACM International Joint Conference on Pervasive and Ubiquitous Computing
+(UbiComp Companion '26)*。引用请用：
+
+```bibtex
+@inproceedings{nl2tltree2026,
+  author    = {Gong, Jiachen and Mao, Wencan and Javanmardi, Ehsan and
+               Li, Yun and Zhou, Quanxi and Tsukada, Manabu},
+  title     = {NL2TL-Tree: Natural Language to Nested Temporal-Logic Trees
+               for Robustness-Guided Flow-Matching Planning},
+  booktitle = {Companion of the 2026 ACM International Joint Conference on
+               Pervasive and Ubiquitous Computing (UbiComp Companion '26)},
+  year      = {2026},
+  month     = oct,
+  address   = {Shanghai, China},
+  publisher = {ACM},
+  doi       = {10.1145/3798063.3837197},
+  isbn      = {979-8-4007-2533-3}
+}
+```
+
+DOI 链接（正式发表后生效）：<https://doi.org/10.1145/3798063.3837197>
