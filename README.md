@@ -20,8 +20,8 @@ single sub-node, then drive a frozen graph-encoded flow-matching planner
 **sound** monitor that certifies keep-safe *and* reach-by-deadline before and
 during execution.
 
-> A detailed, file-by-file walkthrough (in Chinese) lives in
-> [`README.zh.md`](README.zh.md).
+> A detailed, file-by-file walkthrough lives in
+> [`WALKTHROUGH.md`](WALKTHROUGH.md).
 >
 > 📄 **Documents in this repo:** the poster paper
 > ([`ubicomp2026poster.pdf`](ubicomp2026poster.pdf)) and the demo supplement

@@ -1,50 +1,61 @@
-# sim_ros2/ — ROS 2 Humble + Gazebo Classic + TurtleBot3 闭环仿真
+# sim_ros2/ — ROS 2 Humble + Gazebo Classic + TurtleBot3 closed-loop simulation
 
-TurtleBot3(burger)在 **Gazebo Classic**(gazebo11 / `gazebo_ros`)里跑一个**真闭环**:
-机器人用 360° LiDAR(`/scan`)在线感知障碍圆柱,TeLoGraF 周期性地从当前位姿重规划参考
-轨迹,MPPI 控制器跟踪最新轨迹、发 `/cmd_vel`、读 `/odom`,在 RViz 里真实移动。
+A TurtleBot3 (burger) runs a **real closed loop** inside **Gazebo Classic**
+(gazebo11 / `gazebo_ros`): the robot senses the obstacle cylinders online with its
+360° LiDAR (`/scan`), TeLoGraF periodically re-plans a reference trajectory from the
+current pose, and an MPPI controller tracks the latest trajectory, publishing
+`/cmd_vel` and reading `/odom`, so the robot actually moves in RViz.
 
-## 两个进程
+## Two processes
 
-| 角色 | 文件 | 作用 |
+| Role | File | Purpose |
 |---|---|---|
-| 仿真 | [`launch/tb3_sim.launch.py`](launch/tb3_sim.launch.py) | gzserver(开放圆柱 world)+ TB3 spawn + `map→odom` 静态 TF + RViz markers |
-| 闭环控制 | [`tb3_follower.py`](tb3_follower.py) | TeLoGraF 每 5s 重规划 + MPPI 轨迹跟踪 → `/cmd_vel` |
+| Simulation | [`launch/tb3_sim.launch.py`](launch/tb3_sim.launch.py) | gzserver (open cylinder world) + TB3 spawn + static `map→odom` TF + RViz markers |
+| Closed-loop control | [`tb3_follower.py`](tb3_follower.py) | TeLoGraF re-plans every 5 s + MPPI trajectory tracking → `/cmd_vel` |
 
-`case:=<case_id>` 一个参数定全部:case 定义在 [`planner/case_examples.py`](../planner/case_examples.py),
-`map_hint.start` 决定 spawn 在哪里;world 由 [`tb3_world_gen.py`](tb3_world_gen.py) 从 case 程序化生成。
+A single `case:=<case_id>` argument decides everything: cases are defined in
+[`planner/case_examples.py`](../planner/case_examples.py), `map_hint.start` decides
+where the robot spawns, and the world is generated programmatically from the case by
+[`tb3_world_gen.py`](tb3_world_gen.py).
 
-## 开放圆柱 world(不用墙)
+## Open cylinder world (no walls)
 
-场景里**只放圆柱障碍、不用墙体**:
+The scene contains **only cylinder obstacles, no walls**:
 
-- **红色障碍圆柱**是物理实体,机器人的 LiDAR 在线感知、绕开。
-- **目标区(green)不生成物理圆柱** —— 否则 LiDAR 会把目标当障碍绕开、永远到不了;
-  目标只作为 RViz marker 显示。
-- ground / sun **内联**进 SDF(不引用 `model://` 在线模型库),所以 gzserver 启动快、
-  `/spawn_entity` 服务不超时。
+- The **red obstacle cylinders** are physical bodies; the LiDAR senses them online and
+  the robot steers around them.
+- The **goal regions (green) are not spawned as physical cylinders** — otherwise the
+  LiDAR would treat a goal as an obstacle and the robot would never reach it. Goals are
+  shown only as RViz markers.
+- Ground and sun are **inlined** into the SDF (no `model://` references to the online
+  model database), so gzserver starts quickly and the `/spawn_entity` service does not
+  time out.
 
-## 两阶段闭环(论文 §4 / 附录就是这个回路)
+## The two-stage closed loop (this is the loop described in §4 of the paper)
 
-1. **规划线程**:订阅 `/scan`,把激光点投影成世界系障碍圆盘
-   ([`sensor_obstacles.py`](sensor_obstacles.py)),当场跑 TeLoGraF(pure flow + STLCG 引导)
-   **从当前位姿**生成整条参考轨迹;按固定 **5s 周期**滚动重规划(MPC 式)。
-2. **MPPI 控制环**(~7 Hz):对最新参考轨迹做采样式 MPC 跟踪 —— 代价 = 轨迹跟踪 + 趋近目标
-   + 绕开感知到的圆柱(机器人半径感知的安全余量)+ 速度/平滑项 —— 取 softmax 加权控制量
-   发 `/cmd_vel`。
-3. **RViz markers**(latched / transient-local,Fixed Frame `map`):起点、**所有**目标区、
-   已走历史轨迹、传感范围、探测到的障碍,全部可见。
+1. **Planning thread**: subscribes to `/scan`, projects the laser points into
+   world-frame obstacle disks ([`sensor_obstacles.py`](sensor_obstacles.py)), and runs
+   TeLoGraF (pure flow + STLCG guidance) on the spot to generate a full reference
+   trajectory **from the current pose**; it re-plans on a fixed **5 s** period,
+   MPC-style.
+2. **MPPI control loop** (~7 Hz): sampling-based MPC tracking of the latest reference
+   trajectory. The cost combines trajectory tracking, progress toward the goal,
+   avoidance of the sensed cylinders (with a safety margin for the robot radius), and
+   velocity/smoothness terms; the softmax-weighted control is published to `/cmd_vel`.
+3. **RViz markers** (latched / transient-local, fixed frame `map`): the start pose,
+   **all** goal regions, the executed trajectory history, the sensing range, and the
+   detected obstacles are all visible.
 
-## 环境配对
+## Environment pairing
 
-| 组件 | 版本 |
+| Component | Version |
 |---|---|
 | Ubuntu | **22.04 (Jammy)** |
 | ROS 2 | **Humble** (`/opt/ros/humble`) |
 | Gazebo | **Gazebo Classic 11** (`gazebo_ros`) |
 | Robot | **TurtleBot3 burger** (`ros-humble-turtlebot3*`) |
 
-## 一次性装包
+## One-time package installation
 
 ```bash
 sudo apt-get update
@@ -55,44 +66,45 @@ sudo apt-get install -y \
     ros-humble-turtlebot3-msgs
 ```
 
-## 每个新终端先 source(不写进 ~/.bashrc)
+## Source ROS in every new terminal (deliberately not in ~/.bashrc)
 
 ```bash
 source /opt/ros/humble/setup.bash
-export TURTLEBOT3_MODEL=burger        # launch 内部也会设;export 方便手动调试
+export TURTLEBOT3_MODEL=burger        # the launch file sets this too; exporting helps manual debugging
 ```
 
-> 故意不写进 `~/.bashrc`,避免 ROS 把它的 `site-packages` 塞进 `PYTHONPATH` 污染
-> Streamlit / Groq / TeLoGraF 的环境。
+> This is deliberately kept out of `~/.bashrc` so that ROS does not push its
+> `site-packages` into `PYTHONPATH` and pollute the Streamlit / Groq / TeLoGraF
+> environments.
 
-## 用法:两个终端
+## Usage: two terminals
 
 ```bash
-# ====== 终端 A:起 Gazebo Classic + TB3 + RViz(headless 也能出 /scan)======
+# ====== Terminal A: Gazebo Classic + TB3 + RViz (/scan works headless too) ======
 source /opt/ros/humble/setup.bash
 cd /home/jiachen-tlab-ut/Conferences/UbiComp/code
 ros2 launch sim_ros2/launch/tb3_sim.launch.py case:=cond_reach_either rviz:=true
-#  gui:=false(默认)只起 gzserver,不开 3D 窗口;在 RViz 看 markers + /scan
-#  起来后有 /scan、/odom、/cmd_vel、/ubicomp/markers
+#  gui:=false (default) starts only gzserver, with no 3D window; watch the markers + /scan in RViz
+#  once up, /scan, /odom, /cmd_vel and /ubicomp/markers are available
 
-# ====== 终端 B:起闭环 follower ======
+# ====== Terminal B: the closed-loop follower ======
 source /opt/ros/humble/setup.bash
 cd /home/jiachen-tlab-ut/Conferences/UbiComp/code
 python3 sim_ros2/tb3_follower.py --case cond_reach_either
-#  --replan-period 5.0(默认):TeLoGraF 每 5s 重规划一次
-#  --sense-range  3.0:把 LiDAR 点投影成障碍的最大距离
+#  --replan-period 5.0 (default): TeLoGraF re-plans every 5 s
+#  --sense-range  3.0: maximum range at which LiDAR points become obstacles
 ```
 
-**launch 覆盖参数**:
+**Launch overrides**:
 
 ```bash
-ros2 launch sim_ros2/launch/tb3_sim.launch.py case:=reach_avoid            # 换 case
-ros2 launch sim_ros2/launch/tb3_sim.launch.py case:=reach_avoid gui:=true  # 开 Gazebo 3D 窗口
+ros2 launch sim_ros2/launch/tb3_sim.launch.py case:=reach_avoid            # switch case
+ros2 launch sim_ros2/launch/tb3_sim.launch.py case:=reach_avoid gui:=true  # open the Gazebo 3D window
 ros2 launch sim_ros2/launch/tb3_sim.launch.py case:=reach_avoid rviz:=false
 ros2 launch sim_ros2/launch/tb3_sim.launch.py case:=reach_avoid model:=waffle
 ```
 
-## follower 输出示例
+## Example follower output
 
 ```
 [TeLoGraF re-plan #1] from (-3.20,-3.20) -> 18 waypts; sensed 12 cylinders; 3.58s
@@ -101,50 +113,55 @@ ros2 launch sim_ros2/launch/tb3_sim.launch.py case:=reach_avoid model:=waffle
 DONE at (1.94,-2.49); TeLoGraF re-plans=6; sensed 31 cylinder cells; keep-safe rho(G !unsafe) = +1.21 m (SAFE)
 ```
 
-> **实测(2026-06,本机 ROS 2 Humble + Gazebo Classic 11)**:headless 下 `/scan` 正常出点
-> (360 beam),TB3 用 `/cmd_vel` 真驱动、`/odom` 报世界系位姿。一次完整 episode:6 次
-> TeLoGraF 重规划**全部 < 5s**(3.58 / 3.73 / 3.75 / 4.27 / 3.85 / 4.03 s,均值 ~3.9s),
-> 机器人无碰撞到达目标(keep-safe ρ = +1.21 m)。所以 5s 重规划周期合理:规划耗时始终
-> 落在周期内,不会阻塞 MPPI 控制环。
+> **Measured (2026-06, local ROS 2 Humble + Gazebo Classic 11)**: `/scan` returns points
+> normally in headless mode (360 beams), the TB3 is genuinely driven through `/cmd_vel`,
+> and `/odom` reports the world-frame pose. Over one complete episode, all six TeLoGraF
+> re-plans finished **in under 5 s** (3.58 / 3.73 / 3.75 / 4.27 / 3.85 / 4.03 s, mean
+> ~3.9 s) and the robot reached the goal without collision (keep-safe ρ = +1.21 m). The
+> 5 s re-planning period is therefore reasonable: planning always finishes inside the
+> period and never blocks the MPPI control loop.
 
-## 不开 Gazebo 先看 2D 闭环俯视图(无 ROS / 无 GPU)
+## A 2-D closed-loop top view without Gazebo (no ROS, no GPU)
 
-论文附录的闭环俯视图(`closed_loop.png`)来自纯 matplotlib 版本,不依赖 ROS / Gazebo:
+The closed-loop top view (`closed_loop.png`) comes from a pure matplotlib version that
+does not depend on ROS or Gazebo:
 
 ```bash
-python3 sim_ros2/closed_loop_demo.py        # 出 closed_loop.png(论文附录那张俯视图)
+python3 sim_ros2/closed_loop_demo.py        # produces closed_loop.png
 ```
 
-## 排查清单(本机实测)
+## Troubleshooting (all observed locally)
 
-| 现象 | 原因 / 修法 |
+| Symptom | Cause / fix |
 |---|---|
-| `/spawn_entity` 超时、机器人没出现 | world 引用了 `model://` 在线模型 → gzserver 卡在下载。本仓库的 world ground/sun 已内联,不该再出现;若自定义 world 时复现,把 `model://...` 换成内联几何 |
-| 机器人绕开自己的目标、到不了 | 目标被当成了物理障碍。确认 `tb3_world_gen.py` **跳过** `kind=="reach"` 的圆盘(只把红色 obstacle 变物理体) |
-| RViz 里看不到 markers | Fixed Frame 要设成 `map`;launch 已加载 [`gui/markers.rviz`](gui/markers.rviz) 并发 `map→odom` 静态 TF;marker 发布器是 latched(transient-local),RViz 晚连也能拿到 |
-| `/scan` 没数据 | 用 Classic Gazebo 的 CPU `type="ray"` LiDAR(`libgazebo_ros_ray_sensor`),headless 也出点;确认 `TURTLEBOT3_MODEL` 已设 |
-| **rviz2 起不来,报 `undefined symbol: __libc_pthread_init ... GLIBC_PRIVATE`(exit 127)** | **snap 终端(如 snap 版 VS Code)把 `/snap/.../lib` 注入 `LD_LIBRARY_PATH`,rviz2 链到了错的 libpthread。`tb3_sim.launch.py` 现在会自动从 `LD_LIBRARY_PATH` 剔除 `/snap/` 路径;若仍复现,改用系统终端(非 snap)运行,或先 `export LD_LIBRARY_PATH=$(echo $LD_LIBRARY_PATH \| tr ':' '\n' \| grep -v /snap/ \| paste -sd:)`** |
-| gzserver 突然 `exit code -9` | 被**外部 SIGKILL**(常见:别处在跑 `pkill -9 gazebo`,或内存 OOM)。gzserver 正常会一直存活;确认没有别的清理脚本/进程在杀它 |
-| 机器人不动 / 「没反应」 | launch **只起仿真**,机器人要等**第二个终端**起 follower 才动:`python3 sim_ros2/tb3_follower.py --case <id>`。follower 启动头 ~10-30s 静默是正常的(等传感器 + TeLoGraF 冷启动),日志会逐阶段提示 |
-| **卡在 `planning the first TeLoGraF trajectory`、每帧规划要几分钟** | **CPU 抢占**:torch 默认吃满所有核(实测 11/16),和 Gazebo GUI(`gui:=true`)+ RViz 抢核 → 单帧从 ~5s 暴涨到几分钟(超订 + 笔记本 P/E 核降频)。已修:subprocess **默认把 torch 限到 6 核**(`TELOGRAF_THREADS=N` 可调)。**仍慢就 `gui:=false`**(headless Gazebo,只用 RViz 看,最省 CPU);Gazebo 3D 窗口最吃 CPU |
-| `ros2: command not found` / `rclpy` import 报错 | 没 source → `source /opt/ros/humble/setup.bash` |
+| `/spawn_entity` times out, the robot never appears | The world references an online `model://` model, so gzserver stalls while downloading. The ground and sun in this repository's world are already inlined, so this should not recur; if it reappears in a custom world, replace `model://...` with inlined geometry |
+| The robot avoids its own goal and never arrives | The goal was spawned as a physical obstacle. Check that `tb3_world_gen.py` **skips** disks with `kind=="reach"` and only turns the red obstacles into physical bodies |
+| No markers visible in RViz | The fixed frame must be `map`; the launch file already loads [`gui/markers.rviz`](gui/markers.rviz) and publishes the static `map→odom` TF. The marker publisher is latched (transient-local), so RViz still receives them when it connects late |
+| `/scan` has no data | The LiDAR is Classic Gazebo's CPU `type="ray"` sensor (`libgazebo_ros_ray_sensor`), which also produces points headless; check that `TURTLEBOT3_MODEL` is set |
+| **rviz2 fails to start with `undefined symbol: __libc_pthread_init ... GLIBC_PRIVATE` (exit 127)** | **A snap terminal (for example the snap build of VS Code) injects `/snap/.../lib` into `LD_LIBRARY_PATH`, so rviz2 links against the wrong libpthread. `tb3_sim.launch.py` now strips `/snap/` paths from `LD_LIBRARY_PATH` automatically; if it still recurs, run from a system (non-snap) terminal, or first run `export LD_LIBRARY_PATH=$(echo $LD_LIBRARY_PATH \| tr ':' '\n' \| grep -v /snap/ \| paste -sd:)`** |
+| gzserver suddenly reports `exit code -9` | An **external SIGKILL**, commonly another `pkill -9 gazebo` elsewhere, or an OOM kill. gzserver normally stays alive; check that no other cleanup script or process is killing it |
+| The robot does not move / "nothing happens" | The launch file **only starts the simulation**; the robot waits for the follower in the **second terminal**: `python3 sim_ros2/tb3_follower.py --case <id>`. The first ~10–30 s of follower startup are silently spent waiting for sensors and the TeLoGraF cold start; the log reports each stage |
+| **Stuck at `planning the first TeLoGraF trajectory`, with each frame taking minutes** | **CPU contention**: torch takes every core by default (11 of 16 observed here) and competes with the Gazebo GUI (`gui:=true`) plus RViz, so a single frame grows from ~5 s to minutes (oversubscription plus laptop P/E-core throttling). Fixed: the subprocess now **limits torch to 6 threads by default** (`TELOGRAF_THREADS=N` to change it). **If it is still slow, use `gui:=false`** (headless Gazebo, watching only RViz, which is the cheapest); the Gazebo 3D window is the most CPU-hungry component |
+| `ros2: command not found` / `rclpy` import errors | ROS was not sourced → `source /opt/ros/humble/setup.bash` |
 
-## 文件
+## Files
 
-| 文件 | 作用 |
+| File | Purpose |
 |---|---|
-| `launch/tb3_sim.launch.py` | **入口 A**:gzserver(开放圆柱 world)+ TB3 spawn + `map→odom` TF + RViz markers |
-| `tb3_follower.py`          | **入口 B**:TeLoGraF 每 5s 重规划 + MPPI 跟踪 → `/cmd_vel`,读 `/odom`/`/scan`,发 markers |
-| `tb3_world_gen.py`         | 从 case 程序化生成 Classic Gazebo `.world`(内联 ground/sun + 障碍圆柱;跳过 reach 目标)|
-| `sensor_obstacles.py`      | LaserScan → 世界系障碍圆盘(纯函数,可单测),**实时传感器**障碍源 |
-| `closed_loop_demo.py`      | 纯 matplotlib 2D 闭环(出论文附录的 `closed_loop.png`),不依赖 ROS / Gazebo |
-| `gui/markers.rviz`         | RViz 配置(Fixed Frame `map`,MarkerArray `/ubicomp/markers` + LaserScan + RobotModel)|
-| `../keep_safe.py`          | "always keep safe" = 单个传感器接地 STL 谓词 `G(¬unsafe)`;`ρ(¬unsafe)`=到最近障碍距离 |
+| `launch/tb3_sim.launch.py` | **Entry point A**: gzserver (open cylinder world) + TB3 spawn + `map→odom` TF + RViz markers |
+| `tb3_follower.py`          | **Entry point B**: TeLoGraF re-plans every 5 s + MPPI tracking → `/cmd_vel`, reading `/odom` and `/scan` and publishing markers |
+| `tb3_world_gen.py`         | Generates a Classic Gazebo `.world` programmatically from a case (inlined ground/sun + obstacle cylinders; reach goals skipped) |
+| `sensor_obstacles.py`      | LaserScan → world-frame obstacle disks (pure functions, unit-testable); the **live sensor** obstacle source |
+| `closed_loop_demo.py`      | Pure matplotlib 2-D closed loop (produces `closed_loop.png`), independent of ROS and Gazebo |
+| `gui/markers.rviz`         | RViz configuration (fixed frame `map`, MarkerArray `/ubicomp/markers` + LaserScan + RobotModel) |
+| `../keep_safe.py`          | "always keep safe" as a single sensor-grounded STL predicate `G(¬unsafe)`; `ρ(¬unsafe)` is the distance to the nearest obstacle |
 
-## 接 TeLoGraF 真模型
+## Connecting the real TeLoGraF model
 
-闭环规划走真正的 flow-matching 采样。checkpoint / venv 的安装见
-[`code/README.md`](../README.md) 的 "TeLoGraF 安装与使用" 一节;没装的话先在项目根跑:
+Closed-loop planning uses genuine flow-matching sampling. For checkpoint and venv
+installation see the "TeLoGraF installation and use" section of
+[`code/README.md`](../README.md); if it is not installed yet, run this from the project
+root first:
 
 ```bash
 bash scripts/install_telograf.sh

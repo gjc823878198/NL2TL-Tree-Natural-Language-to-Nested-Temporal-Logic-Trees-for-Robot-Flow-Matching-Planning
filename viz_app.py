@@ -17,7 +17,7 @@ import streamlit as st
 from stl_parser import parse_stl, ast_to_dot, ast_to_stl
 
 st.set_page_config(page_title="STL → AST Visualizer", layout="wide")
-st.title("STL → AST 可视化检查工具")
+st.title("STL → AST inspection tool")
 st.caption("Verify that the parser correctly turns STL formulas into the tree representation we'll feed to the LLM.")
 
 mode = st.radio(

@@ -1,118 +1,130 @@
-# STL AST 节点含义参考
+# STL AST node reference
 
-这份文档解释 `stl_parser.py` 产出的 JSON AST 里**每一种节点**的语义。可视化工具里看到任何一个节点,可以查这里。
+This document explains the semantics of **every node type** in the JSON AST produced by
+`stl_parser.py`. Whenever a node appears in the visualization tool, look it up here.
 
-## 通用 schema
+## Common schema
 
-每个节点都是一个 JSON 对象,至少有 `op` 字段:
+Every node is a JSON object with at least an `op` field:
 
 ```json
 {
   "op":       "atom | not | and | or | imply | iff | globally | finally | until",
-  "interval": [low, high] | null,   // 只有时间算子(globally/finally/until)用到
-  "children": [...],                // 非 atom 都有,长度由 op 决定(见下表)
-  "name":     "prop_1"              // 只有 atom 有
+  "interval": [low, high] | null,   // only the temporal operators (globally/finally/until) use this
+  "children": [...],                // present on every non-atom; length depends on op (see table)
+  "name":     "prop_1"              // only atoms have this
 }
 ```
 
-**children 数量速查:**
+**Number of children at a glance:**
 
-| op | children 数量 |
+| op | children |
 |---|---|
-| `atom` | 0(没有 children 字段,有 name) |
+| `atom` | 0 (no `children` field; has `name`) |
 | `not` | 1 |
 | `globally`, `finally` | 1 |
 | `until`, `imply`, `iff` | 2 |
-| `and`, `or` | ≥ 2(同操作符链会被扁平化合并成多 children) |
+| `and`, `or` | ≥ 2 (chains of the same operator are flattened into one multi-child node) |
 
-**interval 字段:** 只有 `globally` / `finally` / `until` 有意义,表示**时间窗口** `[low, high]`(单位由你的应用语义决定:秒、step、tick……)。`high` 可以是 `"inf"` 表示无穷。其余节点 `interval` 为 `null`。
+**The `interval` field:** meaningful only for `globally` / `finally` / `until`, where it
+gives the **time window** `[low, high]` (the unit is decided by the application:
+seconds, steps, ticks, and so on). `high` may be `"inf"` for an unbounded window. On all
+other nodes `interval` is `null`.
 
 ---
 
-## 1. `atom` — 原子谓词(逻辑公式的"叶子")
+## 1. `atom` — atomic predicate (the leaf of the formula)
 
-**含义:** 一个不可再分的命题/事件,典型是 `prop_1`、`prop_2`,在你的应用里对应"机器人在区域 A"、"心率 > 100" 这种**布尔信号**。
+**Meaning:** an indivisible proposition or event, typically `prop_1` or `prop_2`,
+corresponding in an application to a **Boolean signal** such as "the robot is in region A"
+or "heart rate > 100".
 
 **JSON:**
 ```json
 { "op": "atom", "name": "prop_1" }
 ```
 
-**可视化:** 黄色框,显示原始名字。
+**Visualization:** a yellow box showing the raw name.
 
-**关键点:** atom 没有 `children`。它就是树的叶子。
+**Key point:** an atom has no `children`. It is a leaf of the tree.
 
 ---
 
-## 2. `not` — 逻辑非 ¬
+## 2. `not` — logical negation ¬
 
-**含义:** 子公式不成立。`!P` 表示"P 不成立"。
+**Meaning:** the sub-formula does not hold. `!P` means "P does not hold".
 
 **JSON:**
 ```json
 { "op": "not", "interval": null,
-  "children": [ <子公式> ] }
+  "children": [ <sub-formula> ] }
 ```
 
-**可视化:** 浅红框,标 "¬ NOT"。
+**Visualization:** a light red box labelled "¬ NOT".
 
-**例子:** `!prop_1` → "prop_1 不发生"
+**Example:** `!prop_1` means "prop_1 does not occur".
 
 ---
 
-## 3. `and` — 逻辑与 ∧
+## 3. `and` — logical conjunction ∧
 
-**含义:** 所有 children 同时成立。
+**Meaning:** all children hold simultaneously.
 
 **JSON:**
 ```json
 { "op": "and", "interval": null,
-  "children": [ <子1>, <子2>, <子3>, ... ] }
+  "children": [ <child 1>, <child 2>, <child 3>, ... ] }
 ```
 
-**可视化:** 灰色框,标 "∧ AND"。
+**Visualization:** a grey box labelled "∧ AND".
 
-**例子:** `prop_1 & prop_2 & prop_3` 会变成**一个** and 节点带 3 个 children(同操作符链已扁平化)——这样可视化更紧凑,JSON 更短,LLM 学起来也更容易。
+**Example:** `prop_1 & prop_2 & prop_3` becomes **one** and node with three children,
+since chains of the same operator are flattened. This keeps the visualization compact,
+the JSON shorter, and the structure easier for an LLM to learn.
 
 ---
 
-## 4. `or` — 逻辑或 ∨
+## 4. `or` — logical disjunction ∨
 
-**含义:** 至少一个 children 成立。
+**Meaning:** at least one child holds.
 
 **JSON:**
 ```json
 { "op": "or", "interval": null,
-  "children": [ <子1>, <子2>, ... ] }
+  "children": [ <child 1>, <child 2>, ... ] }
 ```
 
-**可视化:** 灰色框,标 "∨ OR"。
+**Visualization:** a grey box labelled "∨ OR".
 
-**扁平化规则:** 同 `and`。
+**Flattening rule:** the same as `and`.
 
 ---
 
-## 5. `imply` — 蕴含 →
+## 5. `imply` — implication →
 
-**含义:** "如果前件成立,则后件成立"。`A -> B` 等价于 `!A | B`,但保留 `imply` 节点比展开成 or-not 更可读。
+**Meaning:** "if the antecedent holds, the consequent holds". `A -> B` is equivalent to
+`!A | B`, but keeping an `imply` node is more readable than expanding it into or-not.
 
 **JSON:**
 ```json
 { "op": "imply", "interval": null,
-  "children": [ <前件 A>, <后件 B> ] }
+  "children": [ <antecedent A>, <consequent B> ] }
 ```
 
-**可视化:** 紫色框,标 "→ IMPLY"。
+**Visualization:** a purple box labelled "→ IMPLY".
 
-**注意:** `imply` 是**有序的**两元运算:`children[0]` 是前件,`children[1]` 是后件。不像 and/or,顺序很重要。
+**Note:** `imply` is an **ordered** binary operator: `children[0]` is the antecedent and
+`children[1]` is the consequent. Unlike and/or, the order matters.
 
-**例子:** `prop_1 -> F[0,5] prop_2` = "一旦 prop_1 发生,则 5 秒内 prop_2 必然发生"。
+**Example:** `prop_1 -> F[0,5] prop_2` means "once prop_1 occurs, prop_2 must occur within
+5 seconds".
 
 ---
 
-## 6. `iff` — 等价 ↔
+## 6. `iff` — equivalence ↔
 
-**含义:** 双向蕴含。`A <-> B` 表示 A 和 B 要么同时成立要么同时不成立。NL2TL 数据集里写作 `equal`。
+**Meaning:** implication in both directions. `A <-> B` means A and B either both hold or
+both fail. The NL2TL dataset writes this as `equal`.
 
 **JSON:**
 ```json
@@ -120,49 +132,57 @@
   "children": [ <A>, <B> ] }
 ```
 
-**可视化:** 紫色框,标 "↔ IFF"。
+**Visualization:** a purple box labelled "↔ IFF".
 
 ---
 
-## 7. `globally` — 全局 □ (G)
+## 7. `globally` — always □ (G)
 
-**含义:** 在指定**时间窗口内每一时刻**,子公式都成立。STL 经典符号 □ 或 G。
+**Meaning:** the sub-formula holds at **every instant within the given time window**. The
+classical STL symbol is □ or G.
 
 **JSON:**
 ```json
 { "op": "globally", "interval": [low, high],
-  "children": [ <子公式> ] }
+  "children": [ <sub-formula> ] }
 ```
 
-**可视化:** 浅蓝框,标 "□ G (globally)" 和区间 `[low, high]`。
+**Visualization:** a light blue box labelled "□ G (globally)" with the interval
+`[low, high]`.
 
-**例子:** `G[0,10] prop_1` = "在时刻 0 到 10 之间,prop_1 始终成立"。
+**Example:** `G[0,10] prop_1` means "prop_1 holds continuously between time 0 and 10".
 
-**关键点:** 这是**单一子公式**的时序算子。区间是**强制有效区间**,不是"持续时间"。
+**Key point:** this is a temporal operator over a **single** sub-formula. The interval is
+the **window in which the requirement is enforced**, not a duration.
 
 ---
 
-## 8. `finally` — 终将 ◇ (F)
+## 8. `finally` — eventually ◇ (F)
 
-**含义:** 在指定时间窗口内**存在某个时刻**,子公式成立。STL 经典符号 ◇ 或 F。
+**Meaning:** there **exists an instant** within the given time window at which the
+sub-formula holds. The classical STL symbol is ◇ or F.
 
 **JSON:**
 ```json
 { "op": "finally", "interval": [low, high],
-  "children": [ <子公式> ] }
+  "children": [ <sub-formula> ] }
 ```
 
-**可视化:** 浅蓝框,标 "◇ F (finally)" 和区间。
+**Visualization:** a light blue box labelled "◇ F (finally)" with the interval.
 
-**例子:** `F[2,5] prop_2` = "在时刻 2 到 5 之间,某一时刻 prop_2 至少要成立一次"。
+**Example:** `F[2,5] prop_2` means "prop_2 must hold at least once at some instant between
+time 2 and 5".
 
-**globally vs. finally:** globally 是"始终",finally 是"至少一次"——区间相同时两者要求强度不同。
+**globally vs. finally:** globally means "at all times", finally means "at least once"; for
+the same interval the two impose requirements of different strength.
 
 ---
 
-## 9. `until` — 直到 U
+## 9. `until` — until U
 
-**含义:** `A U[a,b] B` 表示"从现在起,**A 持续成立**,直到在 `[a,b]` 时间窗口内某一时刻 **B 成立**;并且在 B 成立之前 A 始终成立"。STL 里时序算子里**唯一的二元算子**。
+**Meaning:** `A U[a,b] B` means "from now on **A holds continuously** until, at some instant
+inside the window `[a,b]`, **B holds**; and A holds at every instant before B does". This
+is the **only binary** temporal operator in STL.
 
 **JSON:**
 ```json
@@ -170,68 +190,73 @@
   "children": [ <A>, <B> ] }
 ```
 
-**可视化:** 浅蓝框,标 "U (until)" 和区间。
+**Visualization:** a light blue box labelled "U (until)" with the interval.
 
-**注意 children 顺序:** `children[0]` 是 **A**(在 B 之前必须成立),`children[1]` 是 **B**(终将成立、终止 A 的那个条件)。和 imply 一样,顺序不可调换。
+**Child order matters:** `children[0]` is **A** (which must hold before B), and
+`children[1]` is **B** (the condition that eventually holds and terminates A). As with
+imply, the order cannot be swapped.
 
-**例子:** `prop_1 U[0,5] prop_2` = "prop_1 一直成立,直到 5 秒内某时刻 prop_2 成立"。NL2TL 文本写作 `prop_1 until [0,5] prop_2`。
+**Example:** `prop_1 U[0,5] prop_2` means "prop_1 holds continuously until prop_2 holds at
+some instant within 5 seconds". The NL2TL text form is `prop_1 until [0,5] prop_2`.
 
 ---
 
-## 节点类型 → 可视化颜色速查
+## Node type → visualization colour
 
-| 节点 | 颜色 | 标签 |
+| Node | Colour | Label |
 |---|---|---|
-| `atom` | 🟡 黄 | 原始 name |
-| `not` | 🔴 红 | ¬ NOT |
-| `and` | ⚪ 灰 | ∧ AND |
-| `or` | ⚪ 灰 | ∨ OR |
-| `imply` | 🟣 紫 | → IMPLY |
-| `iff` | 🟣 紫 | ↔ IFF |
-| `globally` | 🔵 蓝 | □ G (globally) [a, b] |
-| `finally` | 🔵 蓝 | ◇ F (finally) [a, b] |
-| `until` | 🔵 蓝 | U (until) [a, b] |
+| `atom` | yellow | the raw name |
+| `not` | red | ¬ NOT |
+| `and` | grey | ∧ AND |
+| `or` | grey | ∨ OR |
+| `imply` | purple | → IMPLY |
+| `iff` | purple | ↔ IFF |
+| `globally` | blue | □ G (globally) [a, b] |
+| `finally` | blue | ◇ F (finally) [a, b] |
+| `until` | blue | U (until) [a, b] |
 
-蓝色都是**时序算子**(带区间),其余是逻辑算子。
+Everything blue is a **temporal operator** (carrying an interval); the rest are logical
+operators.
 
 ---
 
-## 完整示例(对照看)
+## A complete worked example
 
-**自然语言:** "if prop_2 holds continuously until prop_1 occurs between time 176 and 415, and prop_3 also holds, then this is equivalent to prop_4"
+**Natural language:** "if prop_2 holds continuously until prop_1 occurs between time 176
+and 415, and prop_3 also holds, then this is equivalent to prop_4"
 
-**STL 公式(NL2TL 词形):**
+**STL formula (NL2TL word forms):**
 ```
 ( ( ( prop_2 until [176,415] prop_1 ) and prop_3 ) equal prop_4 )
 ```
 
-**JSON AST(每层带含义注解):**
+**JSON AST, annotated level by level:**
 ```json
 {
-  "op": "iff",                        // 顶层是"等价"
+  "op": "iff",                        // the top level is an equivalence
   "interval": null,
   "children": [
     {
-      "op": "and",                    // 左边是"and"
+      "op": "and",                    // the left side is an and
       "interval": null,
       "children": [
         {
-          "op": "until",              // until 是二元时序算子
-          "interval": [176, 415],     // 在 176~415 之间 prop_1 必须发生
+          "op": "until",              // until is a binary temporal operator
+          "interval": [176, 415],     // prop_1 must occur between 176 and 415
           "children": [
-            {"op": "atom", "name": "prop_2"},  // 在那之前 prop_2 一直成立
-            {"op": "atom", "name": "prop_1"}   // 终止条件
+            {"op": "atom", "name": "prop_2"},  // prop_2 holds continuously before that
+            {"op": "atom", "name": "prop_1"}   // the terminating condition
           ]
         },
-        {"op": "atom", "name": "prop_3"}       // 同时 prop_3 也成立
+        {"op": "atom", "name": "prop_3"}       // prop_3 holds as well
       ]
     },
-    {"op": "atom", "name": "prop_4"}            // 等价于 prop_4
+    {"op": "atom", "name": "prop_4"}            // equivalent to prop_4
   ]
 }
 ```
 
-**树形结构:**
+**Tree shape:**
 ```
         iff (↔)
         /    \
@@ -243,26 +268,27 @@
 prop_2  prop_1
 ```
 
-这就是你可视化工具里要看到的树。**verify checklist:**
-- 顶层操作符是 iff ✓
-- iff 的右孩子是单个 atom `prop_4` ✓
-- iff 的左孩子是 and ✓
-- and 有 2 个 children:until 和 prop_3 ✓
-- until 区间是 `[176, 415]` ✓
-- until 的两个 children 顺序是 prop_2(前)、prop_1(后)✓
+This is the tree the visualization tool should show. **Verification checklist:**
+- the top-level operator is iff ✓
+- the right child of iff is the single atom `prop_4` ✓
+- the left child of iff is an and ✓
+- the and has 2 children: until and prop_3 ✓
+- the interval of until is `[176, 415]` ✓
+- the two children of until are in the order prop_2 (first), prop_1 (second) ✓
 
 ---
 
-## 优先级速查(从高到低)
+## Operator precedence (highest to lowest)
 
 ```
-!         (一元 not)
-G, F      (一元时序)
-U         (二元时序)
+!         (unary not)
+G, F      (unary temporal)
+U         (binary temporal)
 &         (and)
 |         (or)
 ->        (imply)
 <->       (iff)
 ```
 
-**例:** `prop_1 & prop_2 | prop_3` 会被解析为 `or(and(prop_1, prop_2), prop_3)`,因为 `&` 优先级高于 `|`。要改顺序请加括号。
+**Example:** `prop_1 & prop_2 | prop_3` parses as `or(and(prop_1, prop_2), prop_3)`,
+because `&` binds tighter than `|`. Add parentheses to change the grouping.
