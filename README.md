@@ -218,6 +218,11 @@ LaTeX next to this repo).
 
 ## Reproducibility
 
+> **This section is the paper's reproducibility reference.** The camera-ready
+> keeps its four-page body per the ACM page budget and points here ("full
+> settings in the released configs") instead of carrying an appendix — the
+> table below is the authoritative record of every setting used in the paper.
+
 These are the exact settings used in the paper.
 
 | Component | Setting |
@@ -230,6 +235,7 @@ These are the exact settings used in the paper.
 | Guidance | STLCG smooth robustness (softmin/softmax) |
 | Feasibility self-check | defer to A* when best-of-N per-atom reach-shortfall > **τ = 2.5 m** |
 | Closed loop | re-plan every **5 s**, MPPI tracking **~7 Hz**, `v_max = 0.22 m/s` |
+| Monitor | sound monitor stops / re-plans on **ρ ≤ 0** (monitor-level) |
 | Scene | goal disks `r ≈ 0.45 m`, LiDAR-sensed cylinders `r = 0.22 m` |
 
 Stage-1 parsing (preliminary, `n = 30`, no fine-tuning): exact-match **56.7%**
@@ -276,6 +282,23 @@ ACM Reference Format:
 > International Joint Conference on Pervasive and Ubiquitous Computing
 > (UbiComp Companion '26), October 11–15, 2026, Shanghai, China.* ACM, New
 > York, NY, USA, 5 pages. https://doi.org/10.1145/3798063.3837197
+
+## Paper copyright and license
+
+The paper is published open access under a **Creative Commons Attribution 4.0
+International (CC BY 4.0)** license:
+
+> This work is licensed under a Creative Commons Attribution 4.0 International
+> License.
+> UbiComp Companion '26, October 11–15, 2026, Shanghai, China
+> © 2026 Copyright held by the owner/author(s).
+> ACM ISBN 979-8-4007-2533-3/2026/10
+> https://doi.org/10.1145/3798063.3837197
+
+The paper PDF in this repository (`ubicomp2026poster.pdf`) is the authors'
+camera-ready version, shared under the same CC BY 4.0 license. The license of
+the code in this repository is stated in the Acknowledgements section below
+(the vendored TeLoGraF code retains its upstream license).
 
 ## Acknowledgements
 

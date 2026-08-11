@@ -731,3 +731,7 @@ latency-aware ρ_time^lat)。
 ```
 
 DOI 链接（正式发表后生效）：<https://doi.org/10.1145/3798063.3837197>
+
+### 论文版权
+
+论文以 **CC BY 4.0**（知识共享-署名 4.0 国际）开放获取发表：© 2026 版权归作者所有，ACM ISBN 979-8-4007-2533-3/2026/10，DOI <https://doi.org/10.1145/3798063.3837197>。仓库中的 `ubicomp2026poster.pdf` 为作者 camera-ready 版本，同样适用 CC BY 4.0。
