@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NL2TL-Tree — demo video</title>
+<meta name="description" content="Demo video for NL2TL-Tree (UbiComp/ISWC 2026 Posters & Demos): a natural-language robot command is parsed into a nested STL tree and executed by a frozen flow-matching planner with an online robustness monitor.">
+<style>
+  :root{--navy:#04385F;--blue:#0B8BEE;--yellow:#FFCD00;--ink:#1A1A1A;--muted:#4D4D4D;--line:#D9D9D9;--card:#F2F2F2}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--ink);font-family:"Noto Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+  header{border-top:10px solid var(--blue);padding:32px 16px 8px}
+  .wrap{max-width:1100px;margin:0 auto}
+  h1{margin:0 0 6px;font-size:clamp(1.5rem,3.4vw,2.4rem);color:var(--navy);line-height:1.2}
+  .sub{margin:0;color:var(--muted);font-size:1.05rem}
+  .venue{display:inline-block;margin-top:10px;padding:4px 10px;border-radius:6px;background:var(--yellow);color:var(--ink);font-weight:600;font-size:.95rem}
+  main{padding:16px}
+  video{display:block;width:100%;max-height:78vh;background:#000;border-radius:10px;border:1px solid var(--line)}
+  .cap{margin:14px 0 0;color:var(--muted)}
+  .cap b{color:var(--ink)}
+  .links{display:flex;flex-wrap:wrap;gap:12px;margin:26px 0 0}
+  .links a{display:inline-block;padding:10px 16px;border-radius:8px;border:2px solid var(--navy);color:var(--navy);text-decoration:none;font-weight:600}
+  .links a.primary{background:var(--navy);color:#fff}
+  .links a:hover{border-color:var(--blue);color:var(--blue)}
+  .links a.primary:hover{background:var(--blue);border-color:var(--blue);color:#fff}
+  footer{margin:40px 0 0;padding:20px 16px 36px;border-top:1px solid var(--line);color:var(--muted);font-size:.95rem}
+  footer p{margin:4px 0}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>NL2TL-Tree: Natural Language to Nested Temporal-Logic Trees for Robustness-Guided Flow-Matching Planning</h1>
+  <p class="sub">Demo video — a phone-typed command becomes a checked spatiotemporal task for a mobile robot.</p>
+  <span class="venue">UbiComp / ISWC 2026 · Posters &amp; Demos · Shanghai, October 11–15</span>
+</div></header>
+
+<main><div class="wrap">
+  <video controls playsinline preload="metadata" src="https://github.com/gjc823878198/NL2TL-Tree-Natural-Language-to-Nested-Temporal-Logic-Trees-for-Robot-Flow-Matching-Planning/releases/download/demo-video/demo.mp4" type="video/mp4">
+    Your browser does not support HTML5 video. <a href="https://github.com/gjc823878198/NL2TL-Tree-Natural-Language-to-Nested-Temporal-Logic-Trees-for-Robot-Flow-Matching-Planning/releases/download/demo-video/demo.mp4">Download the video (MP4, 37 MB)</a>.
+  </video>
+  <p class="cap"><b>What you are watching.</b> A natural-language task is parsed by a <b>frozen LLM</b> into a nested Signal Temporal Logic (STL) tree,
+  rendered to a differentiable robustness ρ, and planned by a <b>frozen flow-matching planner</b> (TeLoGraF) under robustness-gradient guidance.
+  The trajectory is executed closed-loop on a simulated TurtleBot3 (Gazebo) with an online <b>sound robustness monitor</b> that stops and re-plans on ρ ≤ 0.
+  Early-stage prototype; the reported evaluation is a small parsing pilot and a six-task simulation feasibility study.</p>
+
+  <div class="links">
+    <a class="primary" href="https://github.com/gjc823878198/NL2TL-Tree-Natural-Language-to-Nested-Temporal-Logic-Trees-for-Robot-Flow-Matching-Planning/releases/download/demo-video/demo.mp4">Download video (MP4, 37 MB)</a>
+    <a href="https://doi.org/10.1145/3798063.3837197">Paper (DOI)</a>
+    <a href="https://github.com/gjc823878198/NL2TL-Tree-Natural-Language-to-Nested-Temporal-Logic-Trees-for-Robot-Flow-Matching-Planning">Code, prompts &amp; configs</a>
+  </div>
+</div></main>
+
+<footer><div class="wrap">
+  <p>Jiachen Gong, Wencan Mao, Ehsan Javanmardi, Yun Li, Quanxi Zhou, Manabu Tsukada</p>
+  <p>The University of Tokyo · National Institute of Informatics · Tokyo, Japan</p>
+  <p>Companion of the 2026 ACM International Joint Conference on Pervasive and Ubiquitous Computing (UbiComp Companion ’26).</p>
+</div></footer>
+</body>
+</html>

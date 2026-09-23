@@ -36,3 +36,6 @@ __pycache__/
 
 # ---- generated artifacts / paper-figure sources (kept LOCAL, not on GitHub) ----
 outputs/
+
+# the demo video is published as a GitHub Release asset (tag demo-video), not committed
+docs/demo.mp4
